@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>CRC 代币合约控制器 v1.4.0</title>
+  <title>CRC 代币合约控制器 v1.5.0</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <style>
@@ -24,7 +24,7 @@
   <div class="row justify-content-center">
     <div class="col-12 col-xl-11">
       <div class="d-flex align-items-center justify-content-between mb-4">
-        <h2 class="fw-bold"><i class="bi bi-gear-wide-connected me-2"></i>CRC 代币合约控制器 <span class="badge bg-primary">v1.4.0</span></h2>
+        <h2 class="fw-bold"><i class="bi bi-gear-wide-connected me-2"></i>CRC 代币合约控制器 <span class="badge bg-primary">v1.5.0</span></h2>
         <div>
           <button id="connectWalletBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-wallet2"></i> 连接钱包</button>
           <span id="walletAddressDisplay" class="ms-2 small text-muted"></span>
@@ -61,19 +61,23 @@
           <div class="panel-card"><h5 class="section-title">代币基本信息</h5><div id="tokenBasicInfo"></div></div>
           <div class="panel-card"><h5 class="section-title">底池与流动性</h5><div id="pairInfoContainer"></div>
             <button id="launchBtn" class="btn btn-success btn-sm mt-2"><i class="bi bi-rocket-takeoff"></i> 启动交易</button>
+            <div class="param-desc mt-1">点击后，startTradeBlock 将被设置为当前区块号，交易正式开启。</div>
           </div>
           <div class="panel-card"><h5 class="section-title">其他全局参数</h5><div id="miscGlobalInfo"></div></div>
         </div>
 
         <!-- 费率管理 -->
         <div class="tab-pane fade" id="tab-tax">
-          <div class="panel-card"><h5 class="section-title">买卖与流动性税率（基点）</h5><div id="taxRatesContainer"></div>
+          <div class="panel-card"><h5 class="section-title">买卖与流动性税率（基点）</h5>
+            <div id="taxRatesContainer"></div>
             <div class="mt-2">
               <button id="updateTaxBtn" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square"></i> 批量更新买卖费率</button>
               <button id="disableChangeTaxBtn" class="btn btn-outline-danger btn-sm ms-1"><i class="bi bi-lock"></i> 锁定费率修改</button>
             </div>
+            <div class="param-desc mt-2">锁定后将无法再调用 completeCustoms 修改费率。</div>
           </div>
-          <div class="panel-card"><h5 class="section-title">添加/移除流动性税 & 底池燃烧</h5><div id="liquidityTaxContainer"></div>
+          <div class="panel-card"><h5 class="section-title">添加/移除流动性税 & 底池燃烧</h5>
+            <div id="liquidityTaxContainer"></div>
             <div class="mt-2">
               <button id="setAddLiqFeeBtn" class="btn btn-outline-primary btn-sm">设置添加税</button>
               <button id="setRemoveLiqFeeBtn" class="btn btn-outline-primary btn-sm">设置移除税</button>
@@ -86,23 +90,37 @@
 
         <!-- 邀请系统 -->
         <div class="tab-pane fade" id="tab-invite">
-          <div class="panel-card"><h5 class="section-title">邀请参数</h5><div id="inviteParamsContainer"></div>
-            <button id="updateInviteRatesBtn" class="btn btn-warning btn-sm mt-2">更新邀请代数与比例</button>
+          <div class="panel-card"><h5 class="section-title">邀请参数</h5>
+            <div id="inviteParamsContainer"></div>
+            <div class="mt-2">
+              <button id="updateInviteRatesBtn" class="btn btn-warning btn-sm">更新邀请代数与比例</button>
+              <button id="setMinInvitorHoldBtn2" class="btn btn-outline-primary btn-sm ms-1">设置最小邀请人持仓</button>
+              <button id="setMinTransBtn2" class="btn btn-outline-primary btn-sm ms-1">设置最小转账额</button>
+            </div>
           </div>
           <div class="panel-card"><h5 class="section-title">邀请关系查询</h5>
-            <div class="input-group input-group-sm mb-2"><input type="text" id="inviteQueryAddress" class="form-control" placeholder="查询地址"><button id="queryInviteBtn" class="btn btn-outline-secondary">查询</button></div>
+            <div class="input-group input-group-sm mb-2">
+              <input type="text" id="inviteQueryAddress" class="form-control" placeholder="查询地址">
+              <button id="queryInviteBtn" class="btn btn-outline-secondary">查询</button>
+            </div>
             <div id="inviteQueryResult"></div>
-            <div class="mt-3"><label class="form-label">查看绑定者列表</label><input type="text" id="binderOwnerInput" class="form-control form-control-sm" placeholder="邀请人地址"><button id="queryBindersBtn" class="btn btn-outline-secondary btn-sm mt-1">显示绑定者</button><div id="bindersList" class="mt-2 small"></div></div>
+            <div class="mt-3">
+              <label class="form-label">查看绑定者列表</label>
+              <input type="text" id="binderOwnerInput" class="form-control form-control-sm" placeholder="邀请人地址">
+              <button id="queryBindersBtn" class="btn btn-outline-secondary btn-sm mt-1">显示绑定者</button>
+              <div id="bindersList" class="mt-2 small"></div>
+            </div>
           </div>
         </div>
 
         <!-- LP挖矿 -->
         <div class="tab-pane fade" id="tab-mining">
-          <div class="panel-card"><h5 class="section-title">挖矿核心参数</h5><div id="miningParamsContainer"></div>
+          <div class="panel-card"><h5 class="section-title">挖矿核心参数</h5>
+            <div id="miningParamsContainer"></div>
             <div class="mt-2">
-              <button id="setLpRewardConditionBtn" class="btn btn-outline-primary btn-sm">奖励条件</button>
-              <button id="setMinLPHoldBtn" class="btn btn-outline-primary btn-sm">最小LP持仓</button>
-              <button id="setMinInvitorHoldBtn" class="btn btn-outline-primary btn-sm">最小邀请持仓</button>
+              <button id="setLpRewardConditionBtn" class="btn btn-outline-primary btn-sm">设置奖励条件</button>
+              <button id="setMinLPHoldBtn" class="btn btn-outline-primary btn-sm">设置最小LP持仓</button>
+              <button id="setMinInvitorHoldBtn" class="btn btn-outline-primary btn-sm">设置最小邀请持仓</button>
               <button id="setExcludeLpBtn" class="btn btn-outline-primary btn-sm">排除/恢复LP提供者</button>
             </div>
           </div>
@@ -111,7 +129,8 @@
 
         <!-- 开关/状态 -->
         <div class="tab-pane fade" id="tab-switches">
-          <div class="panel-card"><h5 class="section-title">系统开关</h5><div id="switchesContainer"></div>
+          <div class="panel-card"><h5 class="section-title">系统开关</h5>
+            <div id="switchesContainer"></div>
             <div class="mt-2">
               <button id="toggleAntiSyncBtn" class="btn btn-outline-secondary btn-sm">切换 防同步</button>
               <button id="toggleAirdropBtn" class="btn btn-outline-secondary btn-sm">切换 空投</button>
@@ -121,23 +140,24 @@
               <button id="toggleWalletLimitBtn" class="btn btn-outline-secondary btn-sm">切换 持仓限制开关</button>
             </div>
           </div>
-          <div class="panel-card"><h5 class="section-title">限制数值</h5><div id="limitsContainer"></div>
+          <div class="panel-card"><h5 class="section-title">限制数值</h5>
+            <div id="limitsContainer"></div>
             <div class="mt-2">
               <button id="setKbBtn" class="btn btn-outline-primary btn-sm">设置 KB</button>
-              <button id="setMinTransBtn" class="btn btn-outline-primary btn-sm">最小转账额</button>
-              <button id="setMaxWalletBtn" class="btn btn-outline-primary btn-sm">最大持仓</button>
+              <button id="setMaxWalletBtn" class="btn btn-outline-primary btn-sm">设置最大持仓</button>
             </div>
           </div>
         </div>
 
         <!-- 预售 -->
         <div class="tab-pane fade" id="tab-presale">
-          <div class="panel-card"><h5 class="section-title">预售状态</h5><div id="presaleContainer"></div>
+          <div class="panel-card"><h5 class="section-title">预售状态与参数</h5>
+            <div id="presaleContainer"></div>
             <div class="mt-2">
               <button id="togglePresaleBtn" class="btn btn-outline-success btn-sm">开启/关闭预售</button>
-              <button id="setPriceBtn" class="btn btn-outline-primary btn-sm">单价(ETH)</button>
-              <button id="setAmountPerUnitsBtn" class="btn btn-outline-primary btn-sm">每单位代币</button>
-              <button id="setMintLimitBtn" class="btn btn-outline-primary btn-sm">铸造上限</button>
+              <button id="setPriceBtn" class="btn btn-outline-primary btn-sm">设置单价(ETH)</button>
+              <button id="setAmountPerUnitsBtn" class="btn btn-outline-primary btn-sm">设置每单位代币数</button>
+              <button id="setMintLimitBtn" class="btn btn-outline-primary btn-sm">设置铸造上限</button>
             </div>
           </div>
         </div>
@@ -146,11 +166,30 @@
         <div class="tab-pane fade" id="tab-whitelist">
           <div class="panel-card"><h5 class="section-title">手续费白名单 / 奖励黑名单</h5>
             <div class="row">
-              <div class="col-md-6"><input type="text" id="whitelistAddressInput" class="form-control form-control-sm" placeholder="地址"><button id="addFeeWhiteBtn" class="btn btn-outline-success btn-sm mt-1">加入白名单</button><button id="removeFeeWhiteBtn" class="btn btn-outline-danger btn-sm mt-1">移除白名单</button></div>
-              <div class="col-md-6"><input type="text" id="batchAddressInput" class="form-control form-control-sm" placeholder="0x1,0x2 (批量)"><button id="batchRewardListBtn" class="btn btn-outline-dark btn-sm mt-1">批量加入黑名单</button></div>
+              <div class="col-md-6">
+                <label>地址</label>
+                <input type="text" id="whitelistAddressInput" class="form-control form-control-sm" placeholder="0x...">
+                <button id="addFeeWhiteBtn" class="btn btn-outline-success btn-sm mt-1">加入白名单</button>
+                <button id="removeFeeWhiteBtn" class="btn btn-outline-danger btn-sm mt-1">移除白名单</button>
+              </div>
+              <div class="col-md-6">
+                <label>批量地址 (逗号分隔)</label>
+                <input type="text" id="batchAddressInput" class="form-control form-control-sm" placeholder="0x1,0x2">
+                <button id="batchRewardListBtn" class="btn btn-outline-dark btn-sm mt-1">批量加入黑名单</button>
+              </div>
             </div>
-            <div class="mt-3"><label>查询地址状态</label><input type="text" id="statusQueryAddr" class="form-control form-control-sm w-50" placeholder="0x..."><button id="queryStatusBtn" class="btn btn-outline-secondary btn-sm mt-1">查询白/黑名单</button><div id="statusQueryResult" class="small mt-1"></div></div>
-            <div class="mt-3"><label>Swap交易对管理</label><input type="text" id="swapPairInput" class="form-control form-control-sm w-50" placeholder="Pair地址"><button id="addSwapPairBtn" class="btn btn-outline-secondary btn-sm">启用</button><button id="removeSwapPairBtn" class="btn btn-outline-secondary btn-sm">禁用</button></div>
+            <div class="mt-3">
+              <label>查询地址状态</label>
+              <input type="text" id="statusQueryAddr" class="form-control form-control-sm w-50" placeholder="0x...">
+              <button id="queryStatusBtn" class="btn btn-outline-secondary btn-sm mt-1">查询白/黑名单</button>
+              <div id="statusQueryResult" class="small mt-1"></div>
+            </div>
+            <div class="mt-3">
+              <label>Swap交易对管理</label>
+              <input type="text" id="swapPairInput" class="form-control form-control-sm w-50" placeholder="Pair地址">
+              <button id="addSwapPairBtn" class="btn btn-outline-secondary btn-sm">启用</button>
+              <button id="removeSwapPairBtn" class="btn btn-outline-secondary btn-sm">禁用</button>
+            </div>
           </div>
         </div>
 
@@ -170,6 +209,24 @@
                 <button id="transferOwnershipBtn" class="btn btn-outline-danger btn-sm w-100 mb-2">转移所有权</button>
               </div>
             </div>
+            <div class="mt-3 param-group">
+              <div class="param-title">基金地址 / 提取代币 / 增发参数</div>
+              <div class="row g-2">
+                <div class="col-6"><label>新基金地址</label><input type="text" id="newFundAddress" class="form-control form-control-sm" placeholder="0x..."></div>
+                <div class="col-6"><label>提取代币地址</label><input type="text" id="claimTokenAddress" class="form-control form-control-sm" placeholder="0x..."></div>
+                <div class="col-4"><label>提取数量</label><input type="number" id="claimTokenAmount" class="form-control form-control-sm"></div>
+                <div class="col-4"><label>接收地址</label><input type="text" id="claimTokenTo" class="form-control form-control-sm" placeholder="0x..."></div>
+              </div>
+              <div class="row g-2 mt-2">
+                <div class="col-6"><label>增发接收地址</label><input type="text" id="mintTo" class="form-control form-control-sm" placeholder="0x..."></div>
+                <div class="col-6"><label>增发数量</label><input type="number" id="mintAmount" class="form-control form-control-sm"></div>
+              </div>
+              <div class="row g-2 mt-2">
+                <div class="col-4"><label>提取合约令牌分发器地址</label><input type="text" id="claimContractDistributor" class="form-control form-control-sm"></div>
+                <div class="col-4"><label>代币地址</label><input type="text" id="claimContractTokenAddr" class="form-control form-control-sm"></div>
+                <div class="col-4"><label>数量</label><input type="number" id="claimContractAmount" class="form-control form-control-sm"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -182,7 +239,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     (function() {
-      const APP_VERSION = '1.4.0';
+      const APP_VERSION = '1.5.0';
       let signer, provider, contract;
       let contractAddress = localStorage.getItem('crc_contract_address') || '';
       let decimals = 18;
@@ -212,7 +269,6 @@
         if (logContainer.children.length > 30) logContainer.removeChild(logContainer.lastChild);
       }
 
-      // ABI 完整定义 (所有函数)
       const abi = [
         "function name() view returns (string)",
         "function symbol() view returns (string)",
@@ -434,7 +490,7 @@
         `;
       }
 
-      // ---------- 费率管理（内联表单）----------
+      // ---------- 费率管理（全内联输入框）----------
       async function loadTaxInfo() {
         const [bf, bl, bb, sf, sl, sb, rl, al, enableAdd] = await Promise.all([
           contract._buyFundFee(), contract._buyLPFee(), contract.buy_burnFee(),
@@ -470,8 +526,17 @@
             <div class="param-desc">对添加/移除流动性额外征税，防止套利。</div>
           </div>
           <div>允许普通用户添加流动性：${enableAdd ? '✅ 是' : '❌ 否'}</div>
+          <div class="param-group mt-2">
+            <div class="param-title">底池燃烧参数</div>
+            <div class="row g-2">
+              <div class="col-6"><label>燃烧率 (%)</label><input type="number" id="lpBurnRateInput" class="form-control form-control-sm" value="${fromBasisPoints(lpBurnRate)}" step="0.01"></div>
+              <div class="col-6"><label>燃烧频率 (小时)</label><input type="number" id="lpBurnFreqInput" class="form-control form-control-sm" value="${lpBurnFreq / 3600}"></div>
+            </div>
+            <div class="param-desc">底池自动燃烧：每隔指定小时数，燃烧底池代币的指定百分比。</div>
+          </div>
         `;
-        document.getElementById('updateTaxBtn').onclick = async () => {
+        // 绑定事件（读取输入框）
+        document.getElementById('updateTaxBtn').onclick = () => {
           const bf = parseFloat(document.getElementById('buyFundFeeInput').value);
           const bl = parseFloat(document.getElementById('buyLPFeeInput').value);
           const bb = parseFloat(document.getElementById('buyBurnFeeInput').value);
@@ -489,22 +554,22 @@
           const v = parseFloat(document.getElementById('removeLiqFeeInput').value);
           if (!isNaN(v)) sendTx(contract.setRemoveLiquidityFee(toBasisPoints(v)), '移除流动性税已更新');
         };
-        document.getElementById('toggleAddLiqBtn').onclick = async () => {
-          const cur = await contract.enableAddLiquidity();
-          sendTx(contract.setEnableAddLiquidity(!cur), `已切换允许添加流动性为 ${!cur}`);
-        };
         document.getElementById('setLpBurnRateBtn').onclick = () => {
-          const val = prompt('请输入底池燃烧率（%）');
-          if (val && !isNaN(parseFloat(val))) sendTx(contract.setlpBurnRate(toBasisPoints(val)), '燃烧率已更新');
+          const v = parseFloat(document.getElementById('lpBurnRateInput').value);
+          if (!isNaN(v)) sendTx(contract.setlpBurnRate(toBasisPoints(v)), '燃烧率已更新');
         };
         document.getElementById('setLpBurnFreqBtn').onclick = () => {
-          const val = prompt('请输入燃烧频率（小时）');
-          if (val && !isNaN(parseFloat(val))) sendTx(contract.setlpBurnFrequency(Math.floor(val)), '燃烧频率已更新');
+          const v = parseFloat(document.getElementById('lpBurnFreqInput').value);
+          if (!isNaN(v)) sendTx(contract.setlpBurnFrequency(Math.floor(v)), '燃烧频率已更新');
+        };
+        document.getElementById('toggleAddLiqBtn').onclick = async () => {
+          const cur = await contract.enableAddLiquidity();
+          sendTx(contract.setEnableAddLiquidity(!cur), `已切换为 ${!cur}`);
         };
         document.getElementById('disableChangeTaxBtn').onclick = () => sendTx(contract.disableChangeTax(), '费率修改已锁定');
       }
 
-      // ---------- 邀请系统（内联）----------
+      // ---------- 邀请系统（全部内联输入）----------
       async function loadInviteParams() {
         const [gen, f, s, t, l, minInv, minTrans] = await Promise.all([
           contract.generations(), contract.fristRate(), contract.secondRate(), contract.thirdRate(),
@@ -513,7 +578,7 @@
         const container = document.getElementById('inviteParamsContainer');
         container.innerHTML = `
           <div class="param-group">
-            <div class="param-title">代数与比例</div>
+            <div class="param-title">邀请代数与比例（总和必须等于100）</div>
             <div class="row g-2">
               <div class="col-2"><label>代数</label><input type="number" id="generationsInput" class="form-control form-control-sm" value="${gen}"></div>
               <div class="col-2"><label>一代%</label><input type="number" id="fristRateInput" class="form-control form-control-sm" value="${f}"></div>
@@ -521,14 +586,13 @@
               <div class="col-2"><label>三代%</label><input type="number" id="thirdRateInput" class="form-control form-control-sm" value="${t}"></div>
               <div class="col-2"><label>其余%</label><input type="number" id="leftRateInput" class="form-control form-control-sm" value="${l}"></div>
             </div>
-            <div class="param-desc">总和必须等于100：一代+二代+三代+其余每代×(代数-3) = 100</div>
+            <div class="param-desc">一代+二代+三代+其余每代×(代数-3) = 100。例如代数5，一代30，二代20，三代10，其余20，则30+20+10+20×2=100。</div>
           </div>
           <div class="param-group">
             <div class="row g-2">
               <div class="col-6"><label>最小邀请人持仓</label><input type="number" id="minInvitorHoldInput" class="form-control form-control-sm" value="${fromUnits(minInv)}"></div>
               <div class="col-6"><label>最小转账额</label><input type="number" id="minTransAmountInput" class="form-control form-control-sm" value="${fromUnits(minTrans)}"></div>
             </div>
-            <div class="param-desc">低于最小转账额的转账将被忽略（设为0）</div>
           </div>
         `;
         document.getElementById('updateInviteRatesBtn').onclick = () => {
@@ -540,7 +604,15 @@
           if (isNaN(gen+f+s+t+l)) return alert('参数错误');
           sendTx(contract.changeInviteRate([gen,f,s,t,l]), '邀请参数已更新');
         };
-        // 绑定邀请查询
+        document.getElementById('setMinInvitorHoldBtn2').onclick = () => {
+          const v = document.getElementById('minInvitorHoldInput').value;
+          if (v && !isNaN(v)) sendTx(contract.setMinInvitorHoldAmount(toUnits(v)), '最小邀请人持仓已更新');
+        };
+        document.getElementById('setMinTransBtn2').onclick = () => {
+          const v = document.getElementById('minTransAmountInput').value;
+          if (v && !isNaN(v)) sendTx(contract.setMinTransAmount(toUnits(v)), '最小转账额已更新');
+        };
+
         document.getElementById('queryInviteBtn').onclick = async () => {
           const addr = document.getElementById('inviteQueryAddress').value;
           if (!ethers.utils.isAddress(addr)) return alert('无效地址');
@@ -576,9 +648,9 @@
               <div class="col-4"><label>最小LP持仓 (代币)</label><input type="number" id="minLPHoldInput" class="form-control form-control-sm" value="${fromUnits(minLP)}"></div>
               <div class="col-4"><label>最小邀请持仓 (代币)</label><input type="number" id="minInvitorHoldInput2" class="form-control form-control-sm" value="${fromUnits(minInv)}"></div>
             </div>
-            <div class="param-desc">持有LP代币超过最小持仓且满足时间冷却方可获得奖励。</div>
+            <div class="param-desc">持有LP代币超过最小持仓且满足时间冷却方可获得奖励。冷却时间由 _mineLPRewardTimeDebt 控制（当前为 ${(timeDebt/3600).toFixed(1)} 小时）。</div>
           </div>
-          <div>当前索引：${currentIdx} | 进度块：${progBlock} (间隔${progDebt}块) | 冷却：${(timeDebt/3600).toFixed(1)}小时</div>
+          <div>当前索引：${currentIdx} | 进度块：${progBlock} (间隔${progDebt}块)</div>
         `;
         document.getElementById('setLpRewardConditionBtn').onclick = () => {
           const v = document.getElementById('lpRewardConditionInput').value;
@@ -593,7 +665,7 @@
           if (v && !isNaN(v)) sendTx(contract.setMinInvitorHoldAmount(toUnits(v)), '最小邀请持仓已更新');
         };
         document.getElementById('setExcludeLpBtn').onclick = async () => {
-          const addr = prompt('请输入LP提供者地址');
+          const addr = prompt('请输入LP提供者地址'); // 仅此一处保留prompt，因为地址无法用数字输入
           if (!addr || !ethers.utils.isAddress(addr)) return;
           const cur = await contract.excludeLpProvider(addr);
           sendTx(contract.setExcludeLPProvider(addr, !cur), `已${!cur?'排除':'恢复'}该LP提供者`);
@@ -609,7 +681,7 @@
         document.getElementById('lpProvidersContainer').innerHTML = listHtml;
       }
 
-      // ---------- 开关/状态 ----------
+      // ---------- 开关/限制 ----------
       async function loadSwitchesAndLimits() {
         const switches = {
           antiSYNC: await contract.antiSYNC(),
@@ -634,9 +706,10 @@
           <div class="param-group">
             <div class="row g-2">
               <div class="col-4"><label>最大持仓</label><input type="number" id="maxWalletInput" class="form-control form-control-sm" value="${fromUnits(maxWallet)}"></div>
-              <div class="col-4"><label>空投数量</label><input type="number" id="airdropNumInput" class="form-control form-control-sm" value="${airdropNum}"></div>
+              <div class="col-4"><label>空投数量</label><input type="number" id="airdropNumInput" class="form-control form-control-sm" value="${airdropNum}" disabled></div>
               <div class="col-4"><label>KB</label><input type="number" id="kbInput" class="form-control form-control-sm" value="${kb}"></div>
             </div>
+            <div class="param-desc">空投数量只能通过构造函数设置，无法修改。KB 为击杀区块数，控制黑名单持续时间。</div>
           </div>
         `;
         document.getElementById('setMaxWalletBtn').onclick = () => {
@@ -646,10 +719,6 @@
         document.getElementById('setKbBtn').onclick = () => {
           const v = document.getElementById('kbInput').value;
           if (v && !isNaN(v)) sendTx(contract.setkb(v), 'KB已更新');
-        };
-        document.getElementById('setMinTransBtn').onclick = () => {
-          const val = prompt('请输入最小转账额（代币数量）');
-          if (val && !isNaN(val)) sendTx(contract.setMinTransAmount(toUnits(val)), '最小转账额已更新');
         };
         // 开关切换
         document.getElementById('toggleAntiSyncBtn').onclick = async () => {
@@ -689,12 +758,12 @@
           <div class="param-group">
             <div class="row g-2">
               <div class="col-3"><label>单价 (ETH)</label><input type="number" id="priceInput" class="form-control form-control-sm" value="${ethers.utils.formatEther(price)}" step="0.0001"></div>
-              <div class="col-3"><label>每单位代币</label><input type="number" id="amountPerInput" class="form-control form-control-sm" value="${fromUnits(amountPer)}"></div>
+              <div class="col-3"><label>每单位代币数</label><input type="number" id="amountPerInput" class="form-control form-control-sm" value="${fromUnits(amountPer)}"></div>
               <div class="col-3"><label>铸造上限</label><input type="number" id="mintLimitInput" class="form-control form-control-sm" value="${limit}"></div>
               <div class="col-3"><label>已售</label><input class="form-control form-control-sm" value="${minted}" disabled></div>
             </div>
+            <div class="param-desc">预售开关：${enabled ? '开启' : '关闭'}。用户可向合约发送ETH购买代币，单价为输入框中的ETH数量，每单位可获得指定数量代币。</div>
           </div>
-          <div>预售状态：${enabled ? '✅ 开启' : '❌ 关闭'}</div>
         `;
         document.getElementById('togglePresaleBtn').onclick = async () => {
           const cur = await contract.presaleEnabled();
@@ -706,7 +775,7 @@
         };
         document.getElementById('setAmountPerUnitsBtn').onclick = () => {
           const v = document.getElementById('amountPerInput').value;
-          if (v && !isNaN(v)) sendTx(contract.setAmountPerUnits(toUnits(v)), '每单位代币已更新');
+          if (v && !isNaN(v)) sendTx(contract.setAmountPerUnits(toUnits(v)), '每单位代币数已更新');
         };
         document.getElementById('setMintLimitBtn').onclick = () => {
           const v = document.getElementById('mintLimitInput').value;
@@ -745,41 +814,44 @@
         if (ethers.utils.isAddress(addr)) sendTx(contract.setSwapPairList(addr, false), '交易对已禁用');
       };
 
-      // ---------- Owner 工具箱 ----------
+      // ---------- Owner 工具箱（使用内联输入框）----------
       document.getElementById('setFundAddressBtn').onclick = () => {
-        const addr = prompt('新基金地址');
-        if (addr && ethers.utils.isAddress(addr)) sendTx(contract.setFundAddress(addr), '基金地址已更新');
+        const addr = document.getElementById('newFundAddress').value;
+        if (ethers.utils.isAddress(addr)) sendTx(contract.setFundAddress(addr), '基金地址已更新');
+        else alert('请输入有效地址');
       };
-      document.getElementById('claimBalanceBtn').onclick = () => sendTx(contract.claimBalance(), 'ETH已提取');
-      document.getElementById('claimTokenBtn').onclick = async () => {
-        const token = prompt('代币地址');
-        const amount = prompt('数量');
-        const to = prompt('接收地址', currentAccount);
+      document.getElementById('claimBalanceBtn').onclick = () => sendTx(contract.claimBalance(), '合约ETH已提取');
+      document.getElementById('claimTokenBtn').onclick = () => {
+        const token = document.getElementById('claimTokenAddress').value;
+        const amount = document.getElementById('claimTokenAmount').value;
+        const to = document.getElementById('claimTokenTo').value || currentAccount;
         if (token && amount && to) sendTx(contract.claimToken(token, toUnits(amount), to), '代币已提取');
+        else alert('请填写完整信息');
       };
-      document.getElementById('claimContractTokenBtn').onclick = async () => {
-        const distributor = prompt('TokenDistributor地址');
-        const token = prompt('代币地址');
-        const amount = prompt('数量');
+      document.getElementById('claimContractTokenBtn').onclick = () => {
+        const distributor = document.getElementById('claimContractDistributor').value;
+        const token = document.getElementById('claimContractTokenAddr').value;
+        const amount = document.getElementById('claimContractAmount').value;
         if (distributor && token && amount) sendTx(contract.claimContractToken(distributor, token, toUnits(amount)), '已提取');
+        else alert('请填写完整信息');
       };
-      document.getElementById('mintTokenBtn').onclick = async () => {
-        const addr = prompt('接收地址');
-        const amount = prompt('数量');
+      document.getElementById('mintTokenBtn').onclick = () => {
+        const addr = document.getElementById('mintTo').value;
+        const amount = document.getElementById('mintAmount').value;
         if (addr && amount) sendTx(contract.mintToken(addr, toUnits(amount)), '增发成功');
+        else alert('请填写完整信息');
       };
       document.getElementById('renounceOwnershipBtn').onclick = () => {
         if (confirm('⚠️ 确定放弃所有权？不可逆！')) sendTx(contract.renounceOwnership(), '所有权已放弃');
       };
       document.getElementById('transferOwnershipBtn').onclick = () => {
-        const addr = prompt('新Owner地址');
+        const addr = prompt('请输入新所有者地址'); // 地址类需手动输入，保留prompt
         if (addr && ethers.utils.isAddress(addr)) sendTx(contract.transferOwnership(addr), '所有权已转移');
       };
 
       // 启动交易
       document.getElementById('launchBtn').onclick = () => sendTx(contract.launch(), '交易已启动');
 
-      // 通用交易发送
       async function sendTx(txPromise, successMsg='交易成功') {
         try {
           const tx = await txPromise;
@@ -792,7 +864,6 @@
         }
       }
 
-      // 自动连接
       if (window.ethereum && window.ethereum.selectedAddress) {
         document.getElementById('connectWalletBtn').click();
       }
