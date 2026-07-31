@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PandaToken 控制面板 v2.4</title>
+  <title>PandaToken 控制面板 v2.5</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <style>
-    body { background: #f4f6f9; font-family: 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif; }
+    body { background: #f4f6f9; font-family: 'Segoe UI', Roboto, sans-serif; }
     .panel-card { background: #fff; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); padding: 1.5rem; margin-bottom: 1.8rem; }
     .section-title { border-left: 4px solid #0d6efd; padding-left: 12px; margin-bottom: 1.2rem; font-weight: 600; }
     .info-row { display: flex; justify-content: space-between; padding: 0.45rem 0; border-bottom: 1px dashed #dee2e6; }
@@ -16,14 +16,13 @@
     .param-unit { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
     .param-title { font-weight: 600; margin-bottom: 4px; }
     .param-desc { font-size: 0.8rem; color: #6c757d; margin-bottom: 4px; }
-    .param-example { font-size: 0.75rem; color: #198754; }
   </style>
 </head>
 <body class="container-fluid py-3">
   <div class="row justify-content-center">
     <div class="col-12 col-xl-11">
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-gear"></i> PandaToken 控制面板 <span class="badge bg-primary">v2.4</span></h2>
+        <h2><i class="bi bi-gear"></i> PandaToken 控制面板 <span class="badge bg-primary">v2.5</span></h2>
         <div>
           <button id="connectWalletBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-wallet2"></i> 连接钱包</button>
           <span id="walletAddressDisplay" class="ms-2 small text-muted"></span>
@@ -44,7 +43,7 @@
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-invite">邀请</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-mining">挖矿</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-cooldown">冷却</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-sweep">自动归集</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-sweep">归集</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-switches">开关</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-presale">预售</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-whitelist">名单</button></li>
@@ -97,9 +96,7 @@
         <!-- 冷却 -->
         <div class="tab-pane fade" id="tab-cooldown">
           <div class="panel-card"><h5 class="section-title">交易冷却</h5><div id="cooldownContainer">请先加载合约</div>
-            <div class="mt-2">
-              <button id="toggleCooldownBtn" class="btn btn-outline-secondary btn-sm">切换冷却总开关</button>
-            </div>
+            <button id="toggleCooldownBtn" class="btn btn-outline-secondary btn-sm mt-2">切换冷却总开关</button>
           </div>
         </div>
 
@@ -131,7 +128,7 @@
 
         <!-- 预售 -->
         <div class="tab-pane fade" id="tab-presale">
-          <div class="panel-card"><h5 class="section-title">预售参数 (币种不可修改，为currency)</h5><div id="presaleContainer">请先加载合约</div>
+          <div class="panel-card"><h5 class="section-title">预售参数 (币种不可修改)</h5><div id="presaleContainer">请先加载合约</div>
             <button id="togglePresaleBtn" class="btn btn-outline-success btn-sm mt-2">开启/关闭预售</button>
           </div>
         </div>
@@ -170,9 +167,8 @@
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // ==================== 脚本开始 ====================
     (function() {
-      const VERSION = '2.4';
+      const VERSION = '2.5';
       let signer, provider, contract;
       let contractAddress = localStorage.getItem('panda_contract_address') || '';
       let decimals = 18, isOwner = false, currentAccount = '';
@@ -186,7 +182,7 @@
         if(logContainer.children.length>30) logContainer.removeChild(logContainer.lastChild);
       }
 
-      // 完整 ABI（包含所有新增函数）
+      // 完整 ABI（与合约完全对应）
       const abi = [
         "function name() view returns (string)",
         "function symbol() view returns (string)",
@@ -299,7 +295,7 @@
         "function setAmountPerUnits(uint256)",
         "function transferOwnership(address)",
         "function renounceOwnership()",
-        // 冷却新增
+        // 冷却
         "function enableCooldown() view returns (bool)",
         "function buyCooldown() view returns (uint256)",
         "function sellCooldown() view returns (uint256)",
@@ -308,7 +304,7 @@
         "function setBuyCooldown(uint256)",
         "function setSellCooldown(uint256)",
         "function setGlobalCooldown(uint256)",
-        // 自动归集新增
+        // 自动归集
         "function enableAutoSweep() view returns (bool)",
         "function sweepTo() view returns (address)",
         "function maxSweepPerTx() view returns (uint256)",
@@ -321,7 +317,6 @@
         "function removeSweepTargets(address[])"
       ];
 
-      // 钱包连接
       document.getElementById('connectWalletBtn').onclick = async () => {
         if(!window.ethereum) return alert('请安装MetaMask');
         try {
@@ -380,7 +375,8 @@
         await loadPresale();
         await loadTools();
       }
-      // 概览
+
+      // ========== 概览 ==========
       async function loadBasicInfo() {
         const [name,sym,total,ownerAddr,fund,kb,mineRate,start,mainPair,tDist,lpDist,router,cur,isEth] = await Promise.all([
           contract.name(),contract.symbol(),contract.totalSupply(),contract.owner(),contract.fundAddress(),
@@ -430,7 +426,7 @@
         `;
       }
 
-      // 费率
+      // ========== 费率 ==========
       async function loadTax() {
         const [bf,bl,bb,sf,sl,sb,rl,al,rate,freq] = await Promise.all([
           contract._buyFundFee(),contract._buyLPFee(),contract.buy_burnFee(),
@@ -438,11 +434,11 @@
           contract.removeLiquidityFee(),contract.addLiquidityFee(),
           contract.lpBurnRate(),contract.lpBurnFrequency()
         ]);
-        const makeRow = (label,id,val,desc='',example='') => `
-          <div class="param-unit"><div class="param-title">${label}</div>${desc?`<div class="param-desc">${desc}</div>`:''}${example?`<div class="param-example">${example}</div>`:''}
+        const makeRow = (label,id,val,desc='') => `
+          <div class="param-unit"><div class="param-title">${label}</div>${desc?`<div class="param-desc">${desc}</div>`:''}
             <div class="input-group input-group-sm"><input type="number" id="${id}" class="form-control" value="${val}" step="0.01"><span class="input-group-text">%</span><button class="btn btn-outline-primary set-${id}-btn">设置</button></div></div>`;
         document.getElementById('buyTaxContainer').innerHTML = 
-          makeRow('买入基金费','buyFundFeeInput',fromBP(bf),'买入时转入基金的比例','例：2%') +
+          makeRow('买入基金费','buyFundFeeInput',fromBP(bf),'买入时转入基金的比例') +
           makeRow('买入LP费','buyLPFeeInput',fromBP(bl),'买入时转入LP分红池的比例') +
           makeRow('买入燃烧费','buyBurnFeeInput',fromBP(bb),'买入时直接燃烧的比例');
         document.getElementById('sellTaxContainer').innerHTML = 
@@ -457,12 +453,7 @@
           `<div class="param-unit"><div class="param-title">燃烧频率</div>
             <div class="input-group input-group-sm"><input type="number" id="lpBurnFreqInput" class="form-control" value="${freq/3600}"><span class="input-group-text">小时</span><button class="btn btn-outline-primary set-burn-freq-btn">设置</button></div></div>`;
 
-        // 绑定单独setter按钮（不再调用completeCustoms）
-        document.querySelector('.set-buyFundFeeInput-btn').onclick = ()=>{ 
-          const v = document.getElementById('buyFundFeeInput').value;
-          if(v && !isNaN(v)) sendTx(contract.completeCustoms([toBP(v), ...getCurrentTaxes().slice(1)]), '买入基金费已更新');
-        };
-        // 简化处理：全部费率一起更新更安全
+        // 所有单费率按钮均改为调用批量更新，避免单独调用 completeCustoms 参数不全
         document.getElementById('updateTaxBtn').onclick = ()=>{
           const bf = parseFloat(document.getElementById('buyFundFeeInput').value)||0;
           const bl = parseFloat(document.getElementById('buyLPFeeInput').value)||0;
@@ -473,6 +464,14 @@
           if([bf,bl,bb,sf,sl,sb].some(isNaN)) return log('请输入有效的数字', 'error');
           sendTx(contract.completeCustoms([toBP(bf),toBP(bl),toBP(bb),toBP(sf),toBP(sl),toBP(sb)]), '买卖费率已批量更新');
         };
+        // 绑定单个费率按钮也使用相同的批量更新逻辑
+        document.querySelector('.set-buyFundFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
+        document.querySelector('.set-buyLPFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
+        document.querySelector('.set-buyBurnFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
+        document.querySelector('.set-sellFundFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
+        document.querySelector('.set-sellLPFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
+        document.querySelector('.set-sellBurnFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
+
         // 流动性税单独设置
         document.querySelector('.set-removeLiqFeeInput-btn').onclick = ()=>{
           const v = document.getElementById('removeLiqFeeInput').value;
@@ -482,13 +481,13 @@
           const v = document.getElementById('addLiqFeeInput').value;
           if(v && !isNaN(v)) sendTx(contract.setAddLiquidityFee(toBP(v)), '添加流动性税已更新');
         };
-        document.querySelector('.set-burn-freq-btn').onclick = ()=>{
-          const v = document.getElementById('lpBurnFreqInput').value;
-          if(v && !isNaN(v)) sendTx(contract.setlpBurnFrequency(Math.floor(v)), '燃烧频率已更新');
-        };
         document.querySelector('.set-lpBurnRateInput-btn').onclick = ()=>{
           const v = document.getElementById('lpBurnRateInput').value;
           if(v && !isNaN(v)) sendTx(contract.setlpBurnRate(toBP(v)), '燃烧率已更新');
+        };
+        document.querySelector('.set-burn-freq-btn').onclick = ()=>{
+          const v = document.getElementById('lpBurnFreqInput').value;
+          if(v && !isNaN(v)) sendTx(contract.setlpBurnFrequency(Math.floor(v)), '燃烧频率已更新');
         };
         document.getElementById('disableChangeTaxBtn').onclick = ()=> sendTx(contract.disableChangeTax(), '费率修改已锁定');
         document.getElementById('toggleAddLiqBtn').onclick = async ()=>{
@@ -497,7 +496,7 @@
         };
       }
 
-      // 邀请
+      // ========== 邀请 ==========
       async function loadInvite() {
         const [gen,f,s,t,l,minInv,minTrans] = await Promise.all([
           contract.generations(),contract.fristRate(),contract.secondRate(),contract.thirdRate(),
@@ -524,12 +523,13 @@
           parseInt(document.getElementById('thirdRateInput').value)||0,
           parseInt(document.getElementById('leftRateInput').value)||0
         ];
-        document.querySelector('.set-gen-btn').onclick = ()=> sendTx(contract.changeInviteRate(getInviteVals()));
-        document.querySelector('.set-frist-btn').onclick = ()=> sendTx(contract.changeInviteRate(getInviteVals()));
-        document.querySelector('.set-second-btn').onclick = ()=> sendTx(contract.changeInviteRate(getInviteVals()));
-        document.querySelector('.set-third-btn').onclick = ()=> sendTx(contract.changeInviteRate(getInviteVals()));
-        document.querySelector('.set-left-btn').onclick = ()=> sendTx(contract.changeInviteRate(getInviteVals()));
-        document.getElementById('updateInviteRatesBtn').onclick = ()=> sendTx(contract.changeInviteRate(getInviteVals()));
+        const updateInvite = ()=> sendTx(contract.changeInviteRate(getInviteVals()));
+        document.querySelector('.set-gen-btn').onclick = updateInvite;
+        document.querySelector('.set-frist-btn').onclick = updateInvite;
+        document.querySelector('.set-second-btn').onclick = updateInvite;
+        document.querySelector('.set-third-btn').onclick = updateInvite;
+        document.querySelector('.set-left-btn').onclick = updateInvite;
+        document.getElementById('updateInviteRatesBtn').onclick = updateInvite;
 
         document.getElementById('inviteThresholdContainer').innerHTML = `
           <div class="param-unit"><div class="param-title">最小邀请人持仓</div>
@@ -563,7 +563,7 @@
         };
       }
 
-      // 挖矿
+      // ========== 挖矿 ==========
       async function loadMining() {
         const [cond,minLP,minInv,idx,block,debt,time,len] = await Promise.all([
           contract.LPRewardCondition(),contract.minLPHoldAmount(),contract.minInvitorHoldAmount(),
@@ -608,7 +608,8 @@
         listHtml += '</div>';
         document.getElementById('lpProvidersContainer').innerHTML = listHtml;
       }
-      // 冷却
+
+      // ========== 冷却 ==========
       async function loadCooldown() {
         const [ena, buy, sell, global] = await Promise.all([
           contract.enableCooldown(), contract.buyCooldown(), contract.sellCooldown(), contract.globalCooldown()
@@ -640,14 +641,19 @@
         };
       }
 
-      // 自动归集
+      // ========== 自动归集 ==========
       async function loadSweep() {
-        const [ena, to, maxPerTx, listLen] = await Promise.all([
-          contract.enableAutoSweep(), contract.sweepTo(), contract.maxSweepPerTx(),
-          (async()=>{
-            try { let i=0; while(true){ await contract.nonZeroSweepList(i); i++; } } catch { return i; }
-          })()
+        const [ena, to, maxPerTx] = await Promise.all([
+          contract.enableAutoSweep(), contract.sweepTo(), contract.maxSweepPerTx()
         ]);
+        // 获取队列长度（通过不断调用 nonZeroSweepList 直到错误）
+        let listLen = 0;
+        try {
+          while(true) {
+            await contract.nonZeroSweepList(listLen);
+            listLen++;
+          }
+        } catch(e) {}
         document.getElementById('sweepContainer').innerHTML = `
           <div class="param-unit"><div class="param-title">总开关</div><div class="info-value">${ena?'✅ 开启':'❌ 关闭'}</div>
             <button id="toggleSweepBtn" class="btn btn-outline-secondary btn-sm mt-1">切换</button></div>
@@ -681,7 +687,7 @@
         };
       }
 
-      // 开关
+      // ========== 开关 ==========
       async function loadSwitches() {
         const sw = {
           antiSYNC: await contract.antiSYNC(),
@@ -730,7 +736,7 @@
         sendTx(contract[setter](!cur), `${getter} 已切换为 ${!cur}`);
       }
 
-      // 预售
+      // ========== 预售 ==========
       async function loadPresale() {
         const [ena,price,ap,lim,mt] = await Promise.all([
           contract.presaleEnabled(),contract.price(),contract.amountPerUnits(),contract.mintLimit(),contract.minted()
@@ -764,7 +770,7 @@
         };
       }
 
-      // 名单
+      // ========== 名单 ==========
       document.getElementById('addFeeWhiteBtn').onclick = ()=>{
         const addr = document.getElementById('whitelistAddressInput').value;
         if(ethers.utils.isAddress(addr)) sendTx(contract.setFeeWhiteList([addr],true), '已加入白名单');
@@ -789,7 +795,7 @@
         if(ethers.utils.isAddress(addr)) sendTx(contract.setSwapPairList(addr,false), '交易对已禁用');
       };
 
-      // 查询
+      // ========== 查询 ==========
       document.getElementById('queryAllBtn').onclick = async ()=>{
         const addr = document.getElementById('queryAddressInput').value;
         if(!ethers.utils.isAddress(addr)) return log('无效地址', 'error');
@@ -808,7 +814,7 @@
 
       document.getElementById('launchBtn').onclick = ()=> sendTx(contract.launch(), '交易已启动');
 
-      // 工具箱
+      // ========== 工具箱 ==========
       async function loadTools() {
         document.getElementById('toolsContainer').innerHTML = `
           <div class="param-unit"><div class="param-title">设置基金地址</div>
@@ -830,7 +836,6 @@
         document.querySelector('.set-fund-btn').onclick = ()=>{
           const addr = document.getElementById('newFundAddress').value;
           if(ethers.utils.isAddress(addr)) sendTx(contract.setFundAddress(addr), '基金地址已更新');
-          else log('无效地址', 'error');
         };
         document.getElementById('claimBalanceBtn').onclick = ()=> sendTx(contract.claimBalance(), '合约ETH已提取');
         document.getElementById('claimTokenBtn').onclick = ()=>{
@@ -838,30 +843,27 @@
           const amount = document.getElementById('claimTokenAmount').value;
           const to = document.getElementById('claimTokenTo').value || currentAccount;
           if(token && amount) sendTx(contract.claimToken(token, toUnits(amount), to), '代币已提取');
-          else log('请完整填写信息', 'error');
         };
         document.getElementById('claimContractTokenBtn').onclick = ()=>{
           const dis = document.getElementById('claimContractDistributor').value;
           const token = document.getElementById('claimContractTokenAddr').value;
           const amount = document.getElementById('claimContractAmount').value;
           if(dis && token && amount) sendTx(contract.claimContractToken(dis, token, toUnits(amount)), '已提取');
-          else log('请完整填写信息', 'error');
         };
         document.getElementById('mintTokenBtn').onclick = ()=>{
           const addr = document.getElementById('mintTo').value;
           const amount = document.getElementById('mintAmount').value;
           if(addr && amount) sendTx(contract.mintToken(addr, toUnits(amount)), '增发成功');
-          else log('请完整填写信息', 'error');
         };
         document.querySelector('.set-transfer-btn').onclick = ()=>{
           const addr = document.getElementById('transferOwnershipInput').value;
           if(ethers.utils.isAddress(addr)) sendTx(contract.transferOwnership(addr), '所有权已转移');
-          else log('无效地址', 'error');
         };
         document.getElementById('renounceOwnershipBtn').onclick = ()=>{
           if(confirm('放弃所有权不可逆，确定吗？')) sendTx(contract.renounceOwnership(), '所有权已放弃');
         };
       }
+
       async function sendTx(promise, msg='操作成功') {
         try {
           const tx = await promise;
