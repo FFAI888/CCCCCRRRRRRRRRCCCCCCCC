@@ -39,6 +39,7 @@
 
       <ul class="nav nav-pills mb-3 flex-wrap" id="mainTab">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-info">概览</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-stats">数据统计</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-tax">费率</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-invite">邀请</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-mining">挖矿</button></li>
@@ -59,6 +60,19 @@
             <button id="launchBtn" class="btn btn-success btn-sm mt-2"><i class="bi bi-rocket"></i> 启动交易</button>
           </div>
           <div class="panel-card"><h5 class="section-title">全局参数</h5><div id="miscGlobalInfo">请先加载合约</div></div>
+        </div>
+
+        <!-- 数据统计（新增） -->
+        <div class="tab-pane fade" id="tab-stats">
+          <div class="panel-card"><h5 class="section-title">🔥 燃烧统计</h5><div id="burnStatsContainer">请先加载合约</div></div>
+          <div class="panel-card"><h5 class="section-title">⛏️ 挖矿/邀请奖励总览</h5><div id="miningStatsContainer">请先加载合约</div></div>
+          <div class="panel-card"><h5 class="section-title">👤 单地址挖矿状态查询</h5>
+            <div class="input-group input-group-sm mb-2">
+              <input type="text" id="miningQueryAddress" class="form-control" placeholder="输入地址查询">
+              <button id="miningQueryBtn" class="btn btn-outline-primary">查询</button>
+            </div>
+            <div id="miningQueryResult" class="small"></div>
+          </div>
         </div>
 
         <!-- 费率 -->
@@ -182,7 +196,6 @@
         if(logContainer.children.length>30) logContainer.removeChild(logContainer.lastChild);
       }
 
-      // 完整 ABI（与合约完全对应）
       const abi = [
         "function name() view returns (string)",
         "function symbol() view returns (string)",
@@ -295,7 +308,6 @@
         "function setAmountPerUnits(uint256)",
         "function transferOwnership(address)",
         "function renounceOwnership()",
-        // 冷却
         "function enableCooldown() view returns (bool)",
         "function buyCooldown() view returns (uint256)",
         "function sellCooldown() view returns (uint256)",
@@ -304,7 +316,6 @@
         "function setBuyCooldown(uint256)",
         "function setSellCooldown(uint256)",
         "function setGlobalCooldown(uint256)",
-        // 自动归集
         "function enableAutoSweep() view returns (bool)",
         "function sweepTo() view returns (address)",
         "function maxSweepPerTx() view returns (uint256)",
@@ -366,6 +377,7 @@
         await loadBasicInfo();
         await loadPairInfo();
         await loadMisc();
+        await loadStats();  // 新增
         await loadTax();
         await loadInvite();
         await loadMining();
@@ -426,6 +438,95 @@
         `;
       }
 
+      // ========== 数据统计（新增） ==========
+      async function loadStats() {
+        // 燃烧统计
+        const burnAddr = '0x000000000000000000000000000000000000dEaD';
+        const [burnBal, burnRate, burnFreq, lastBurn, pairBal] = await Promise.all([
+          contract.balanceOf(burnAddr),
+          contract.lpBurnRate(),
+          contract.lpBurnFrequency(),
+          contract.lastLpBurnTime(),
+          contract.balanceOf(await contract._mainPair())
+        ]);
+        const nextBurnTime = lastBurn > 0 ? lastBurn + burnFreq : 0;
+        const now = Math.floor(Date.now()/1000);
+        const estimatedBurnPerTime = pairBal.mul(burnRate).div(10000); // 底池代币量 * 燃烧率 / 10000
+        document.getElementById('burnStatsContainer').innerHTML = `
+          <div class="info-row"><span class="info-label">总燃烧量 (0xdead余额)</span><span class="info-value">${fromUnits(burnBal)} 代币</span></div>
+          <div class="info-row"><span class="info-label">上次底池燃烧时间</span><span class="info-value">${lastBurn>0?new Date(lastBurn*1000).toLocaleString():'从未'}</span></div>
+          <div class="info-row"><span class="info-label">底池燃烧频率</span><span class="info-value">${burnFreq} 秒 (约 ${(burnFreq/3600).toFixed(1)} 小时)</span></div>
+          <div class="info-row"><span class="info-label">底池燃烧率</span><span class="info-value">${burnRate} (${fromBP(burnRate)}%)</span></div>
+          <div class="info-row"><span class="info-label">预计下次燃烧时间</span><span class="info-value">${nextBurnTime>now?new Date(nextBurnTime*1000).toLocaleString():'随时可触发'}</span></div>
+          <div class="info-row"><span class="info-label">当前底池代币量</span><span class="info-value">${fromUnits(pairBal)}</span></div>
+          <div class="info-row"><span class="info-label">下次燃烧预估量</span><span class="info-value">${fromUnits(estimatedBurnPerTime)} 代币</span></div>
+          <small class="text-muted">* 总燃烧量包含买卖燃烧费及底池自动燃烧之和。买卖燃烧费直接转入死地址，底池燃烧从交易对中销毁代币。</small>
+        `;
+
+        // 挖矿/邀请奖励统计
+        const totalSupply = await contract.totalSupply();
+        const mineRate = await contract.mineRate();
+        const lpDistributor = await contract._LPRewardDistributor();
+        const poolBalance = await contract.balanceOf(lpDistributor);
+        const initialPool = totalSupply.mul(mineRate).div(100);
+        const minedTotal = initialPool.sub(poolBalance);
+        const lpCount = await contract.getLPProviderLength();
+        const currentIdx = await contract._currentMineLPIndex();
+        const blockDebt = await contract._progressMineLPBlockDebt();
+        const progressBlock = await contract._progressMineLPBlock();
+        const timeDebt = await contract._mineLPRewardTimeDebt();
+        const condition = await contract.LPRewardCondition();
+
+        document.getElementById('miningStatsContainer').innerHTML = `
+          <div class="info-row"><span class="info-label">奖池地址余额</span><span class="info-value">${fromUnits(poolBalance)}</span></div>
+          <div class="info-row"><span class="info-label">初始奖池总量</span><span class="info-value">${fromUnits(initialPool)} (${mineRate}%)</span></div>
+          <div class="info-row"><span class="info-label">已挖总量 (含邀请奖励)</span><span class="info-value">${fromUnits(minedTotal)}</span></div>
+          <div class="info-row"><span class="info-label">LP 提供者总数</span><span class="info-value">${lpCount}</span></div>
+          <div class="info-row"><span class="info-label">当前挖矿索引</span><span class="info-value">${currentIdx} / ${lpCount}</span></div>
+          <div class="info-row"><span class="info-label">挖矿区块间隔</span><span class="info-value">${blockDebt} 区块</span></div>
+          <div class="info-row"><span class="info-label">上次挖矿区块</span><span class="info-value">${progressBlock}</span></div>
+          <div class="info-row"><span class="info-label">单次奖励基准</span><span class="info-value">${fromUnits(condition)} 代币</span></div>
+          <div class="info-row"><span class="info-label">领取冷却时间</span><span class="info-value">${timeDebt} 秒 (${(timeDebt/3600).toFixed(1)} 小时)</span></div>
+          <small class="text-muted">* 已挖总量 = 初始奖池 - 当前余额，包含 LP 挖矿及邀请奖励。合约未单独记录邀请奖励，两者共享同一资金池。</small>
+        `;
+
+        // 单地址查询
+        document.getElementById('miningQueryBtn').onclick = async () => {
+          const addr = document.getElementById('miningQueryAddress').value;
+          if(!ethers.utils.isAddress(addr)) return log('无效地址', 'error');
+          const [lastRewardTime, isExcluded, lpIndex] = await Promise.all([
+            contract._lastMineLPRewardTimes(addr),
+            contract.excludeLpProvider(addr),
+            contract.lpProviderIndex(addr)
+          ]);
+          const nowTs = Math.floor(Date.now()/1000);
+          const nextAvailable = Number(lastRewardTime) + Number(timeDebt);
+          let statusHtml = '';
+          if(lpIndex == 0) {
+            statusHtml = '该地址不是 LP 提供者。';
+          } else if(isExcluded) {
+            statusHtml = '该地址已被排除，无法领取挖矿奖励。';
+          } else if(lastRewardTime == 0) {
+            statusHtml = '已加入 LP 列表，但尚未领取过奖励（需等待首次 24 小时冷却）。';
+          } else {
+            if(nowTs >= nextAvailable) {
+              statusHtml = '已满足领取条件，可被下一次挖矿轮巡触发。';
+            } else {
+              const waitSec = nextAvailable - nowTs;
+              const hours = Math.floor(waitSec/3600);
+              const mins = Math.floor((waitSec%3600)/60);
+              statusHtml = `还需等待约 ${hours} 小时 ${mins} 分钟。`;
+            }
+          }
+          document.getElementById('miningQueryResult').innerHTML = `
+            <div class="info-row"><span class="info-label">上次领取时间</span><span class="info-value">${lastRewardTime>0?new Date(lastRewardTime*1000).toLocaleString():'从未'}</span></div>
+            <div class="info-row"><span class="info-label">LP 提供者索引</span><span class="info-value">${lpIndex}</span></div>
+            <div class="info-row"><span class="info-label">是否被排除</span><span class="info-value">${isExcluded?'是 ❌':'否 ✅'}</span></div>
+            <div class="mt-1">${statusHtml}</div>
+          `;
+        };
+      }
+
       // ========== 费率 ==========
       async function loadTax() {
         const [bf,bl,bb,sf,sl,sb,rl,al,rate,freq] = await Promise.all([
@@ -453,7 +554,6 @@
           `<div class="param-unit"><div class="param-title">燃烧频率</div>
             <div class="input-group input-group-sm"><input type="number" id="lpBurnFreqInput" class="form-control" value="${freq/3600}"><span class="input-group-text">小时</span><button class="btn btn-outline-primary set-burn-freq-btn">设置</button></div></div>`;
 
-        // 所有单费率按钮均改为调用批量更新，避免单独调用 completeCustoms 参数不全
         document.getElementById('updateTaxBtn').onclick = ()=>{
           const bf = parseFloat(document.getElementById('buyFundFeeInput').value)||0;
           const bl = parseFloat(document.getElementById('buyLPFeeInput').value)||0;
@@ -464,7 +564,6 @@
           if([bf,bl,bb,sf,sl,sb].some(isNaN)) return log('请输入有效的数字', 'error');
           sendTx(contract.completeCustoms([toBP(bf),toBP(bl),toBP(bb),toBP(sf),toBP(sl),toBP(sb)]), '买卖费率已批量更新');
         };
-        // 绑定单个费率按钮也使用相同的批量更新逻辑
         document.querySelector('.set-buyFundFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
         document.querySelector('.set-buyLPFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
         document.querySelector('.set-buyBurnFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
@@ -472,7 +571,6 @@
         document.querySelector('.set-sellLPFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
         document.querySelector('.set-sellBurnFeeInput-btn').onclick = ()=> document.getElementById('updateTaxBtn').click();
 
-        // 流动性税单独设置
         document.querySelector('.set-removeLiqFeeInput-btn').onclick = ()=>{
           const v = document.getElementById('removeLiqFeeInput').value;
           if(v && !isNaN(v)) sendTx(contract.setRemoveLiquidityFee(toBP(v)), '移除流动性税已更新');
@@ -646,7 +744,6 @@
         const [ena, to, maxPerTx] = await Promise.all([
           contract.enableAutoSweep(), contract.sweepTo(), contract.maxSweepPerTx()
         ]);
-        // 获取队列长度（通过不断调用 nonZeroSweepList 直到错误）
         let listLen = 0;
         try {
           while(true) {
