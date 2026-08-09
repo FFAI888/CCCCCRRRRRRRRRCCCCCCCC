@@ -17,6 +17,9 @@
     .param-title { font-weight: 600; margin-bottom: 4px; }
     .param-desc { font-size: 0.8rem; color: #6c757d; margin-bottom: 4px; }
     .tooltip-icon { cursor: help; color: #6c757d; margin-left: 4px; }
+    .diagnosis-ok { color: #198754; font-weight: 600; }
+    .diagnosis-fail { color: #dc3545; font-weight: 600; }
+    .diagnosis-warn { color: #fd7e14; font-weight: 600; }
   </style>
 </head>
 <body class="container-fluid py-3">
@@ -56,7 +59,7 @@
       </ul>
 
       <div class="tab-content">
-        <!-- 概览 (原有) -->
+        <!-- 概览 -->
         <div class="tab-pane fade show active" id="tab-info">
           <div class="panel-card"><h5 class="section-title">代币信息</h5><div id="tokenBasicInfo">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">流动性</h5><div id="pairInfoContainer">请先加载合约</div>
@@ -65,12 +68,12 @@
           <div class="panel-card"><h5 class="section-title">全局参数</h5><div id="miscGlobalInfo">请先加载合约</div></div>
         </div>
 
-        <!-- 市场数据 (原有) -->
+        <!-- 市场数据 -->
         <div class="tab-pane fade" id="tab-market">
           <div class="panel-card"><h5 class="section-title">实时价格与市值</h5><div id="marketContainer">请先加载合约</div></div>
         </div>
 
-        <!-- 统计 (原有) -->
+        <!-- 统计 -->
         <div class="tab-pane fade" id="tab-stats">
           <div class="panel-card"><h5 class="section-title">🔥 燃烧统计</h5><div id="burnStatsContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">⛏️ 挖矿/邀请奖励总览</h5><div id="miningStatsContainer">请先加载合约</div></div>
@@ -81,7 +84,7 @@
           </div>
         </div>
 
-        <!-- 当前设置（新增） -->
+        <!-- 当前设置 -->
         <div class="tab-pane fade" id="tab-current-settings">
           <div class="panel-card"><h5 class="section-title">全局参数</h5><div id="globalSettingsContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">买卖费率</h5><div id="taxSettingsContainer">请先加载合约</div></div>
@@ -91,7 +94,7 @@
           <div class="panel-card"><h5 class="section-title">归集与预售</h5><div id="sweepPresaleSettingsContainer">请先加载合约</div></div>
         </div>
 
-        <!-- 费率 (原有) -->
+        <!-- 费率 -->
         <div class="tab-pane fade" id="tab-tax">
           <div class="panel-card"><h5 class="section-title">买入手续费</h5><div id="buyTaxContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">卖出手续费</h5><div id="sellTaxContainer">请先加载合约</div></div>
@@ -104,7 +107,7 @@
           </div>
         </div>
 
-        <!-- 邀请 (原有) -->
+        <!-- 邀请 -->
         <div class="tab-pane fade" id="tab-invite">
           <div class="panel-card"><h5 class="section-title">代数与比例</h5><div id="inviteRateContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">邀请门槛</h5><div id="inviteThresholdContainer">请先加载合约</div></div>
@@ -114,8 +117,40 @@
           </div>
         </div>
 
-        <!-- 挖矿 (原有) -->
+        <!-- 挖矿 (增强版) -->
         <div class="tab-pane fade" id="tab-mining">
+          <!-- NEW: 流程说明与诊断面板 -->
+          <div class="panel-card">
+            <h5 class="section-title">📖 LP 挖矿与邀请奖励流程</h5>
+            <div class="param-desc">
+              <ol class="small">
+                <li><b>成为LP提供者：</b>在DEX添加流动性获取交易对LP代币。卖出代币或添加流动性时，合约会自动记录你的LP数量。</li>
+                <li><b>触发条件：</b>每次有转账发生（非白名单、非添加流动性）会尝试运行挖矿循环，每约100个区块处理一批LP地址。</li>
+                <li><b>获得奖励：</b>同时满足以下条件时会获得LP奖励：
+                  <ul>
+                    <li>地址在LP提供者列表中（未排除）</li>
+                    <li>记录的LP数量 ≥ 最小LP持仓（<span id="minLpDisplay">-</span> 代币）</li>
+                    <li>距上次奖励已过冷却时间（<span id="cooldownDisplay">-</span> 小时）</li>
+                    <li>奖池余额 ≥ 2 × 单次奖励基准（<span id="rewardCondDisplay">-</span> 代币）</li>
+                  </ul>
+                </li>
+                <li><b>邀请奖励：</b>当某人获得LP奖励时，其邀请链上的上级若持币量≥门槛，会按设定的比例获得额外奖励。</li>
+                <li><b>奖池来源：</b>总供应量的 <span id="mineRateDisplay">-</span>% 存入 LPRewardDistributor。</li>
+              </ol>
+              <p class="mt-1 mb-0"><b>为什么你没收到？</b> 使用下方诊断面板逐项检查你的地址。</p>
+            </div>
+          </div>
+          <!-- NEW: 详细诊断 -->
+          <div class="panel-card">
+            <h5 class="section-title">🔍 地址挖矿诊断</h5>
+            <div class="input-group input-group-sm mb-3">
+              <input type="text" id="diagnoseAddress" class="form-control" placeholder="输入要诊断的钱包地址">
+              <button id="diagnoseBtn" class="btn btn-primary">开始诊断</button>
+            </div>
+            <div id="diagnoseResult" class="small"></div>
+          </div>
+
+          <!-- 原有挖矿参数与LP管理 -->
           <div class="panel-card"><h5 class="section-title">挖矿参数</h5><div id="miningParamsContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">LP管理</h5>
             <div class="param-unit"><div class="param-title">排除/恢复LP</div><div class="input-group input-group-sm"><input type="text" id="excludeLpAddress" class="form-control" placeholder="地址"><button id="setExcludeLpBtn" class="btn btn-outline-primary">切换</button></div></div>
@@ -125,14 +160,14 @@
           </div>
         </div>
 
-        <!-- 冷却 (原有) -->
+        <!-- 冷却 -->
         <div class="tab-pane fade" id="tab-cooldown">
           <div class="panel-card"><h5 class="section-title">交易冷却</h5><div id="cooldownContainer">请先加载合约</div>
             <button id="toggleCooldownBtn" class="btn btn-outline-secondary btn-sm mt-2">切换冷却总开关</button>
           </div>
         </div>
 
-        <!-- 归集 (原有) -->
+        <!-- 归集 -->
         <div class="tab-pane fade" id="tab-sweep">
           <div class="panel-card"><h5 class="section-title">自动归集设置</h5><div id="sweepContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">充值地址管理</h5>
@@ -141,7 +176,7 @@
           </div>
         </div>
 
-        <!-- 开关 (原有) -->
+        <!-- 开关 -->
         <div class="tab-pane fade" id="tab-switches">
           <div class="panel-card"><h5 class="section-title">开关状态</h5><div id="switchesContainer">请先加载合约</div>
             <div class="mt-2">
@@ -158,14 +193,14 @@
           <div class="panel-card"><h5 class="section-title">限制数值</h5><div id="limitsContainer">请先加载合约</div></div>
         </div>
 
-        <!-- 预售 (原有) -->
+        <!-- 预售 -->
         <div class="tab-pane fade" id="tab-presale">
           <div class="panel-card"><h5 class="section-title">预售参数 (币种不可修改)</h5><div id="presaleContainer">请先加载合约</div>
             <button id="togglePresaleBtn" class="btn btn-outline-success btn-sm mt-2">开启/关闭预售</button>
           </div>
         </div>
 
-        <!-- 名单 (原有) -->
+        <!-- 名单 -->
         <div class="tab-pane fade" id="tab-whitelist">
           <div class="panel-card"><h5 class="section-title">白名单</h5>
             <div class="input-group input-group-sm"><input type="text" id="whitelistAddressInput" class="form-control" placeholder="地址"><button id="addFeeWhiteBtn" class="btn btn-outline-success">加入</button><button id="removeFeeWhiteBtn" class="btn btn-outline-danger">移除</button></div>
@@ -178,7 +213,7 @@
           </div>
         </div>
 
-        <!-- 综合查询 (原有) -->
+        <!-- 综合查询 -->
         <div class="tab-pane fade" id="tab-query">
           <div class="panel-card"><h5 class="section-title">综合查询</h5>
             <div class="input-group input-group-sm mb-2"><input type="text" id="queryAddressInput" class="form-control" placeholder="地址"><button id="queryAllBtn" class="btn btn-primary">查询</button></div>
@@ -186,7 +221,7 @@
           </div>
         </div>
 
-        <!-- 工具箱 (原有) -->
+        <!-- 工具箱 -->
         <div class="tab-pane fade" id="tab-tools">
           <div class="panel-card"><h5 class="section-title">Owner 工具箱</h5><div id="toolsContainer">请先加载合约</div></div>
         </div>
@@ -500,7 +535,7 @@
         } catch(e) { document.getElementById('marketContainer').innerHTML = `<div class="text-danger">市场数据加载失败：${e.message}</div>`; }
       }
 
-      // ========== 统计 (原有) ==========
+      // ========== 统计 ==========
       async function loadStats() {
         const deadAddr = '0x000000000000000000000000000000000000dEaD';
         const mainPairAddr = await contract._mainPair();
@@ -560,7 +595,7 @@
         };
       }
 
-      // ========== 当前设置（新增） ==========
+      // ========== 当前设置 ==========
       async function loadCurrentSettings() {
         try {
           const [
@@ -803,13 +838,22 @@
         };
       }
 
-      // ========== 挖矿 (原有) ==========
+      // ========== 挖矿 (增强版) ==========
       async function loadMining() {
-        const [cond,minLP,minInv,idx,block,debt,time,len] = await Promise.all([
+        const [cond,minLP,minInv,idx,block,debt,time,len,mainPair,mineRateVal,lpDistributor,totalSupply] = await Promise.all([
           contract.LPRewardCondition(),contract.minLPHoldAmount(),contract.minInvitorHoldAmount(),
           contract._currentMineLPIndex(),contract._progressMineLPBlock(),contract._progressMineLPBlockDebt(),
-          contract._mineLPRewardTimeDebt(),contract.getLPProviderLength()
+          contract._mineLPRewardTimeDebt(),contract.getLPProviderLength(),
+          contract._mainPair(),contract.mineRate(),contract._LPRewardDistributor(),contract.totalSupply()
         ]);
+
+        // 更新流程说明中的参数
+        document.getElementById('minLpDisplay').textContent = fromUnits(minLP) + ' 代币';
+        document.getElementById('cooldownDisplay').textContent = (time/3600).toFixed(1);
+        document.getElementById('rewardCondDisplay').textContent = fromUnits(cond) + ' 代币';
+        document.getElementById('mineRateDisplay').textContent = mineRateVal.toString();
+
+        // 原有参数卡片
         document.getElementById('miningParamsContainer').innerHTML = `
           <div class="param-unit"><div class="param-title">奖励条件 (代币)</div>
             <div class="input-group input-group-sm"><input type="number" id="lpRewardConditionInput" class="form-control" value="${fromUnits(cond)}"><button class="btn btn-outline-primary set-reward-btn">设置</button></div></div>
@@ -856,6 +900,92 @@
             log('挖矿可能已触发', 'success');
             await refreshAll();
           } catch(e) { log('触发失败: '+e.message, 'error'); }
+        };
+
+        // ====== NEW: 诊断按钮事件 ======
+        document.getElementById('diagnoseBtn').onclick = async () => {
+          const addr = document.getElementById('diagnoseAddress').value.trim();
+          if (!ethers.utils.isAddress(addr)) return log('无效地址', 'error');
+          const resultDiv = document.getElementById('diagnoseResult');
+          resultDiv.innerHTML = '查询中...';
+          try {
+            // 基础信息
+            const mainPairAddr = await contract._mainPair();
+            const lpToken = new ethers.Contract(mainPairAddr, [
+              'function balanceOf(address) view returns (uint256)',
+              'function totalSupply() view returns (uint256)'
+            ], provider);
+            const [
+              lpIndex, excluded, lastReward, timeDebt, rewardCond, minLPHold, minInvitorHold,
+              userLpBalance, totalLpSupply, inviter, poolBalance, currentIdx, providerCount
+            ] = await Promise.all([
+              contract.lpProviderIndex(addr),
+              contract.excludeLpProvider(addr),
+              contract._lastMineLPRewardTimes(addr),
+              contract._mineLPRewardTimeDebt(),
+              contract.LPRewardCondition(),
+              contract.minLPHoldAmount(),
+              contract.minInvitorHoldAmount(),
+              lpToken.balanceOf(addr),
+              lpToken.totalSupply(),
+              contract._inviter(addr),
+              contract.balanceOf(await contract._LPRewardDistributor()),
+              contract._currentMineLPIndex(),
+              contract.getLPProviderLength()
+            ]);
+
+            const nowTs = Math.floor(Date.now()/1000);
+            const coolDownSec = Number(timeDebt);
+            const nextRewardTime = Number(lastReward) + coolDownSec;
+            const effectiveLp = userLpBalance; // 使用实际余额（合约记录不可直接读取，实际奖励以合约内部为准）
+            const meetsMinLp = effectiveLp.gte(minLPHold);
+            const meetsCooldown = lastReward == 0 || nowTs >= nextRewardTime;
+            const poolOk = poolBalance.gte(rewardCond.mul(2));
+            const notExcluded = !excluded;
+            const inList = lpIndex > 0;
+            const userLpShare = totalLpSupply.gt(0) ? effectiveLp.mul(ethers.constants.WeiPerEther).div(totalLpSupply) : 0;
+            const estimatedReward = rewardCond.mul(userLpShare).div(ethers.constants.WeiPerEther);
+
+            // 计算挖矿轮次位置
+            let positionMsg = '';
+            if (inList && providerCount > 0) {
+              const userIndex = Number(lpIndex) - 1;
+              const curIdx = Number(currentIdx) % providerCount;
+              let distance;
+              if (userIndex >= curIdx) {
+                distance = userIndex - curIdx;
+              } else {
+                distance = providerCount - curIdx + userIndex;
+              }
+              positionMsg = `你的位置：${userIndex+1}/${providerCount}，当前索引：${curIdx+1}，预计还需处理 ${distance} 个地址才能轮到你（触发取决于链上交易量）。`;
+            } else {
+              positionMsg = '你不在 LP 提供者列表中，无法参与轮巡。';
+            }
+
+            const formatCheck = (ok, msg) => ok ? `<span class="diagnosis-ok">✅ ${msg}</span>` : `<span class="diagnosis-fail">❌ ${msg}</span>`;
+            const formatWarn = (msg) => `<span class="diagnosis-warn">⚠️ ${msg}</span>`;
+
+            resultDiv.innerHTML = `
+              <div class="info-row"><span class="info-label">LP提供者索引</span><span class="info-value">${lpIndex > 0 ? lpIndex : '未加入'}</span></div>
+              <div class="info-row"><span class="info-label">排除状态</span><span class="info-value">${formatCheck(notExcluded, notExcluded?'未排除':'已被管理员排除')}</span></div>
+              <div class="info-row"><span class="info-label">实际LP余额</span><span class="info-value">${fromUnits(userLpBalance)} 代币</span></div>
+              <div class="info-row"><span class="info-label">最小LP持仓要求</span><span class="info-value">${fromUnits(minLPHold)} 代币</span></div>
+              <div class="info-row"><span class="info-label">满足最小持仓</span><span class="info-value">${formatCheck(meetsMinLp, meetsMinLp?'满足':'不满足，需要更多LP')}</span></div>
+              <div class="info-row"><span class="info-label">上次奖励时间</span><span class="info-value">${lastReward>0 ? new Date(lastReward*1000).toLocaleString() : '从未'}</span></div>
+              <div class="info-row"><span class="info-label">冷却剩余</span><span class="info-value">${meetsCooldown ? formatCheck(true,'已冷却') : `还需 ${Math.ceil((nextRewardTime-nowTs)/60)} 分钟`}</span></div>
+              <div class="info-row"><span class="info-label">奖池余额</span><span class="info-value">${fromUnits(poolBalance)} 代币 (最低要求 ${fromUnits(rewardCond.mul(2))})</span></div>
+              <div class="info-row"><span class="info-label">奖池是否充足</span><span class="info-value">${formatCheck(poolOk, poolOk?'充足':'不足，需等待池子积累')}</span></div>
+              <div class="info-row"><span class="info-label">你的LP份额</span><span class="info-value">${(Number(ethers.utils.formatEther(userLpShare))*100).toFixed(4)}%</span></div>
+              <div class="info-row"><span class="info-label">预计可获奖励</span><span class="info-value">${fromUnits(estimatedReward)} 代币（仅供参考）</span></div>
+              <div class="info-row"><span class="info-label">邀请人</span><span class="info-value">${inviter}（上级需持有 ≥ ${fromUnits(minInvitorHold)} 代币才可获得邀请奖励）</span></div>
+              <div class="mt-2">${positionMsg}</div>
+              <div class="param-desc mt-1">* 注意：合约内部记录的LP数量可能小于实际余额（如果发生过移除流动性），此处显示实际余额。最终奖励以合约内部逻辑为准。</div>
+              ${!inList && !excluded && userLpBalance.gt(0) ? `<div class="mt-2 text-danger">你持有LP但尚未被合约记录为提供者。请进行一次卖出操作或向交易对添加流动性，系统才会将你加入列表。</div>` : ''}
+              ${poolOk && meetsMinLp && meetsCooldown && inList && notExcluded ? `<div class="mt-2 text-success">所有条件均满足！等待下一次转账触发的挖矿轮巡处理到你的地址时即可收到奖励。</div>` : ''}
+            `;
+          } catch(e) {
+            resultDiv.innerHTML = `<div class="text-danger">诊断失败：${e.message}</div>`;
+          }
         };
       }
 
