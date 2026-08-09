@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PandaToken 控制面板 v3.2 最终完整版</title>
+  <title>PandaToken 控制面板 v3.1 增强诊断</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <style>
@@ -26,10 +26,9 @@
   <div class="row justify-content-center">
     <div class="col-12 col-xl-11">
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-gear"></i> PandaToken 控制面板 <span class="badge bg-primary">v3.2</span></h2>
+        <h2><i class="bi bi-gear"></i> PandaToken 控制面板 <span class="badge bg-primary">v3.1</span></h2>
         <div>
           <button id="connectWalletBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-wallet2"></i> 连接钱包</button>
-          <button id="refreshAllBtn" class="btn btn-outline-info btn-sm ms-2"><i class="bi bi-arrow-clockwise"></i> 刷新全部数据</button>
           <span id="walletAddressDisplay" class="ms-2 small text-muted"></span>
         </div>
       </div>
@@ -118,7 +117,7 @@
           </div>
         </div>
 
-        <!-- 挖矿 (完整增强版) -->
+        <!-- 挖矿 (增强版) -->
         <div class="tab-pane fade" id="tab-mining">
           <!-- 流程说明 -->
           <div class="panel-card">
@@ -138,6 +137,7 @@
                 <li><b>邀请奖励：</b>当某人获得LP奖励时，其邀请链上的上级若持币量≥门槛，会按设定的比例获得额外奖励。</li>
                 <li><b>奖池来源：</b>总供应量的 <span id="mineRateDisplay">-</span>% 存入 LPRewardDistributor。</li>
               </ol>
+              <p class="mt-1 mb-0"><b>为什么你没收到？</b> 使用下方诊断面板逐项检查你的地址。</p>
             </div>
           </div>
 
@@ -158,16 +158,11 @@
           <div class="panel-card"><h5 class="section-title">LP管理</h5>
             <div class="param-unit"><div class="param-title">排除/恢复LP</div><div class="input-group input-group-sm"><input type="text" id="excludeLpAddress" class="form-control" placeholder="地址"><button id="setExcludeLpBtn" class="btn btn-outline-primary">切换</button></div></div>
             <div id="lpProvidersContainer" class="small">请先加载合约</div>
-            <div class="d-flex gap-2 mt-2">
-              <button id="forceMineBtn" class="btn btn-outline-secondary btn-sm"><i class="bi bi-lightning"></i> 手动触发挖矿</button>
-              <button id="updateLpRecordBtn" class="btn btn-outline-success btn-sm"><i class="bi bi-arrow-repeat"></i> 更新我的LP记录</button>
-            </div>
-            <div class="param-desc mt-1">
-              “手动触发挖矿”将向自己转0代币，可能推动挖矿轮巡并分配奖励；“更新我的LP记录”同样通过转0代币触发，可强制更新最后一位添加流动性地址的LP记录。两个操作消耗相同Gas。
-            </div>
+            <button id="forceMineBtn" class="btn btn-outline-secondary btn-sm mt-2"><i class="bi bi-lightning"></i> 手动触发挖矿</button>
+            <div class="param-desc">点击后向自己转0代币，可能触发挖矿轮巡（需消耗gas，且发送者不在白名单）</div>
           </div>
 
-          <!-- LP排除原因分析 -->
+          <!-- NEW: LP排除原因分析 -->
           <div class="panel-card">
             <h5 class="section-title">🛑 LP排除原因分析</h5>
             <div class="input-group input-group-sm mb-3">
@@ -178,20 +173,8 @@
             <div class="param-desc mt-2">
               合约排除LP提供者通常有两种原因：<br>
               1. <b>管理员手动排除</b>：通过 <code>setExcludeLPProvider(addr, true)</code> 执行。<br>
-              2. <b>合约自动排除</b>：当某次交易检测到该地址添加流动性后，LP余额异常增长，导致债务超过最大允许债务。通常发生在添加少量LP后立刻移除大量流动性，或通过闪电贷等行为操纵底池。
-            </div>
-          </div>
-
-          <!-- 未加入列表原因分析 -->
-          <div class="panel-card">
-            <h5 class="section-title">❓ 为什么没有加入 LP 提供者列表？</h5>
-            <div class="input-group input-group-sm mb-3">
-              <input type="text" id="notInListAddress" class="form-control" placeholder="输入未在列表的地址">
-              <button id="notInListBtn" class="btn btn-info">分析原因</button>
-            </div>
-            <div id="notInListResult" class="small"></div>
-            <div class="param-desc mt-2">
-              合约仅在<strong>卖出</strong>代币时，才会将卖出地址记录为候选 LP 提供者。如果你只添加了流动性却从未卖出过，就不会出现在列表中。请执行一次小额卖出以触发记录。
+              2. <b>合约自动排除</b>：当某次交易检测到该地址添加流动性后，LP余额异常增长，导致债务 (<code>debtAmount</code>) 超过最大允许债务 (<code>maxDebtAmount</code>)。此时合约会认为该地址为恶意LP，将其永久排除。这通常发生在添加少量LP后立刻移除大量流动性，或通过闪电贷等行为操纵底池。
+              <br>下方分析将结合当前状态给出最可能的原因，但无法替代链上交易历史的彻底复查。
             </div>
           </div>
         </div>
@@ -209,6 +192,7 @@
           <div class="panel-card"><h5 class="section-title">充值地址管理</h5>
             <div class="param-unit"><div class="param-title">批量添加地址</div><div class="input-group input-group-sm"><input type="text" id="sweepAddInput" class="form-control" placeholder="地址1,地址2,..."><button id="sweepAddBtn" class="btn btn-outline-success">添加</button></div></div>
             <div class="param-unit"><div class="param-title">批量移除地址</div><div class="input-group input-group-sm"><input type="text" id="sweepRemoveInput" class="form-control" placeholder="地址1,地址2,..."><button id="sweepRemoveBtn" class="btn btn-outline-danger">移除</button></div></div>
+          </div>
         </div>
 
         <!-- 开关 -->
@@ -266,8 +250,7 @@
     </div>
   </div>
 
-  <!-- 接下来是完整的JavaScript部分，见第二部分 -->
-    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     (function() {
@@ -443,13 +426,6 @@
         } catch(e) { log('连接失败', 'error'); }
       };
 
-      document.getElementById('refreshAllBtn').onclick = async () => {
-        if(!contract) return log('请先加载合约', 'error');
-        log('正在刷新全部数据...', 'info');
-        await refreshAll();
-        log('数据刷新完成', 'success');
-      };
-
       const addrInput = document.getElementById('contractAddressInput');
       addrInput.value = contractAddress;
       addrInput.addEventListener('input', ()=>{
@@ -548,7 +524,7 @@
         `;
       }
 
-      // ========== 市场数据 (修复多精度) ==========
+      // ========== 市场数据 ==========
       async function loadMarket() {
         try {
           const [totalSupply, pairAddr, isEth, currencyAddr] = await Promise.all([
@@ -558,24 +534,17 @@
           const [reserves, token0] = await Promise.all([pc.getReserves(), pc.token0()]);
           const tokenReserve = token0.toLowerCase() === contractAddress.toLowerCase() ? reserves[0] : reserves[1];
           const currencyReserve = token0.toLowerCase() === contractAddress.toLowerCase() ? reserves[1] : reserves[0];
-
-          let currencyDecimals = 18;
+          const price = Number(ethers.utils.formatEther(currencyReserve)) / Number(fromUnits(tokenReserve));
+          const circSupply = Number(fromUnits(totalSupply));
+          const marketCap = price * circSupply;
+          const tvl = Number(ethers.utils.formatEther(currencyReserve)) * 2;
           let symbol = isEth ? 'ETH' : 'TOKEN';
           if (!isEth) {
             try {
-              const curContract = new ethers.Contract(currencyAddr, ['function decimals() view returns (uint8)','function symbol() view returns (string)'], provider);
-              currencyDecimals = await curContract.decimals();
+              const curContract = new ethers.Contract(currencyAddr, ['function symbol() view returns (string)'], provider);
               symbol = await curContract.symbol();
-            } catch(e) { currencyDecimals = 18; }
+            } catch(e) { symbol = 'TOKEN'; }
           }
-
-          const tokenUnits = Number(fromUnits(tokenReserve, decimals));
-          const currencyUnits = Number(ethers.utils.formatUnits(currencyReserve, currencyDecimals));
-          const price = currencyUnits / tokenUnits;
-          const circSupply = Number(fromUnits(totalSupply, decimals));
-          const marketCap = price * circSupply;
-          const tvl = currencyUnits * 2;
-
           document.getElementById('marketContainer').innerHTML = `
             <div class="info-row"><span class="info-label">当前价格</span><span class="info-value">1 代币 = ${price.toFixed(8)} ${symbol}</span></div>
             <div class="info-row"><span class="info-label">流通市值 (估算)</span><span class="info-value">${marketCap.toFixed(2)} ${symbol}</span></div>
@@ -755,7 +724,7 @@
         }
       }
 
-      // ========== 费率 ==========
+      // ========== 费率 (原有) ==========
       async function loadTax() {
         const [bf,bl,bb,sf,sl,sb,rl,al,rate,freq] = await Promise.all([
           contract._buyFundFee(),contract._buyLPFee(),contract.buy_burnFee(),
@@ -767,7 +736,7 @@
           <div class="param-unit"><div class="param-title">${label} <i class="bi bi-question-circle tooltip-icon" data-bs-toggle="tooltip" title="${tip}"></i></div>
             <div class="input-group input-group-sm"><input type="number" id="${id}" class="form-control" value="${val}" step="0.01"><span class="input-group-text">%</span><button class="btn btn-outline-primary set-${id}-btn">设置</button></div></div>`;
         document.getElementById('buyTaxContainer').innerHTML = 
-          makeRow('买入基金费','buyFundFeeInput',fromBP(bf),'买入时转入基金地址的比例') +
+          makeRow('买入基金费','buyFundFeeInput',fromBP(bf),'买入时转入基金地址的比例，例如2%表示每买100代币有2个给基金') +
           makeRow('买入LP费','buyLPFeeInput',fromBP(bl),'买入时转入LP分红奖池的比例') +
           makeRow('买入燃烧费','buyBurnFeeInput',fromBP(bb),'买入时直接打入死地址燃烧的比例');
         document.getElementById('sellTaxContainer').innerHTML = 
@@ -821,7 +790,7 @@
         };
       }
 
-      // ========== 邀请 ==========
+      // ========== 邀请 (原有) ==========
       async function loadInvite() {
         const [gen,f,s,t,l,minInv,minTrans] = await Promise.all([
           contract.generations(),contract.fristRate(),contract.secondRate(),contract.thirdRate(),
@@ -950,17 +919,6 @@
           } catch(e) { log('触发失败: '+e.message, 'error'); }
         };
 
-        // NEW: 更新我的LP记录按钮
-        document.getElementById('updateLpRecordBtn').onclick = async ()=>{
-          try {
-            const tx = await contract.transfer(currentAccount, 0);
-            log(`已提交LP记录更新交易 ${tx.hash}`, 'info');
-            await tx.wait();
-            log('LP记录可能已更新，请查看列表变化', 'success');
-            await refreshAll();
-          } catch(e) { log('更新失败: '+e.message, 'error'); }
-        };
-
         // 地址挖矿诊断
         document.getElementById('diagnoseBtn').onclick = async () => {
           const addr = document.getElementById('diagnoseAddress').value.trim();
@@ -1023,7 +981,7 @@
 
             resultDiv.innerHTML = `
               <div class="info-row"><span class="info-label">LP提供者索引</span><span class="info-value">${lpIndex > 0 ? lpIndex : '未加入'}</span></div>
-              <div class="info-row"><span class="info-label">排除状态</span><span class="info-value">${formatCheck(notExcluded, notExcluded?'未排除':'已被排除')}</span></div>
+              <div class="info-row"><span class="info-label">排除状态</span><span class="info-value">${formatCheck(notExcluded, notExcluded?'未排除':'已被管理员排除')}</span></div>
               <div class="info-row"><span class="info-label">实际LP余额</span><span class="info-value">${fromUnits(userLpBalance)} 代币</span></div>
               <div class="info-row"><span class="info-label">最小LP持仓要求</span><span class="info-value">${fromUnits(minLPHold)} 代币</span></div>
               <div class="info-row"><span class="info-label">满足最小持仓</span><span class="info-value">${formatCheck(meetsMinLp, meetsMinLp?'满足':'不满足，需要更多LP')}</span></div>
@@ -1044,7 +1002,7 @@
           }
         };
 
-        // LP排除原因分析
+        // NEW: LP排除原因分析
         document.getElementById('exclusionQueryBtn').onclick = async () => {
           const addr = document.getElementById('exclusionQueryAddress').value.trim();
           if (!ethers.utils.isAddress(addr)) return log('无效地址', 'error');
@@ -1069,6 +1027,8 @@
               return;
             }
 
+            // 检查是否为管理员手动排除（只能推测，因为链上没有记录是谁设置的）
+            // 提供可能的原因分析文本
             let reasonHtml = '<div class="diagnosis-fail">❌ 该地址已被排除，无法领取LP奖励。</div>';
             reasonHtml += '<ul class="mt-2">';
             reasonHtml += `<li><b>排除状态：</b>是 (LP提供者索引: ${lpIndex > 0 ? lpIndex : '未加入'})</li>`;
@@ -1096,56 +1056,9 @@
             resultDiv.innerHTML = `<div class="text-danger">分析失败：${e.message}</div>`;
           }
         };
-
-        // 分析为何不在列表中
-        document.getElementById('notInListBtn').onclick = async () => {
-          const addr = document.getElementById('notInListAddress').value.trim();
-          if (!ethers.utils.isAddress(addr)) return log('无效地址', 'error');
-          const resultDiv = document.getElementById('notInListResult');
-          resultDiv.innerHTML = '分析中...';
-          try {
-            const mainPairAddr = await contract._mainPair();
-            const lpToken = new ethers.Contract(mainPairAddr, [
-              'function balanceOf(address) view returns (uint256)',
-              'function totalSupply() view returns (uint256)'
-            ], provider);
-            const [lpIndex, excluded, lpBalance, startTradeBlock, lastMaybeAddr] = await Promise.all([
-              contract.lpProviderIndex(addr),
-              contract.excludeLpProvider(addr),
-              lpToken.balanceOf(addr),
-              contract.startTradeBlock(),
-              contract._lastMaybeAddLPAddress()
-            ]);
-
-            if (lpIndex > 0) {
-              resultDiv.innerHTML = `<div class="diagnosis-ok">✅ 该地址已经在 LP 提供者列表中 (索引 ${lpIndex})，无需分析加入问题。${excluded ? '但请注意该地址已被排除。' : ''}</div>`;
-              return;
-            }
-
-            let html = '<div class="diagnosis-warn">⚠️ 该地址不在 LP 提供者列表中。</div>';
-            html += '<ul class="mt-2">';
-            if (lpBalance.eq(0)) {
-              html += '<li><b>LP余额：</b>0。该地址未持有任何交易对 LP 代币。</li>';
-              html += '<li><b>结论：</b>你需要先为该代币添加流动性，获得 LP 代币后，再执行一次<strong>卖出</strong>操作（哪怕 1 代币），合约才会将你记录到 LP 提供者列表。</li>';
-            } else {
-              html += `<li><b>LP余额：</b>${fromUnits(lpBalance)} 代币。该地址持有 LP，但未被合约记录。</li>`;
-              html += '<li><b>原因：</b>合约仅在卖出代币的交易中，将卖出地址标记为待检查的 LP 提供者，并随后将其加入列表（若无异常）。你尚未执行过任何卖出交易，因此未被记录。</li>';
-              html += '<li><b>操作建议：</b>请执行一笔小额卖出代币（例如卖出 1 个代币），合约将自动将你添加到 LP 提供者列表，并开始参与挖矿轮巡。</li>';
-              html += '<li><b>注意：</b>如果卖出时你的 LP 余额远超过合约记录的初始值（因之前添加流动性后未记录），可能会触发债务检测，存在被自动排除的风险。正常情况下，首次卖出后应能安全加入。</li>';
-            }
-            html += '<li><b>当前交易状态：</b>' + (startTradeBlock > 0 ? '交易已启动' : '交易尚未启动，无法进行买卖') + '</li>';
-            if (addr.toLowerCase() === lastMaybeAddr.toLowerCase()) {
-              html += '<li><b>额外提示：</b>该地址是合约最后记录的添加流动性地址，可能即将在下一次转账中被处理并加入列表。</li>';
-            }
-            html += '</ul>';
-            resultDiv.innerHTML = html;
-          } catch(e) {
-            resultDiv.innerHTML = `<div class="text-danger">分析失败：${e.message}</div>`;
-          }
-        };
       }
 
-      // ========== 冷却 ==========
+      // ========== 冷却 (原有) ==========
       async function loadCooldown() {
         const [ena, buy, sell, global] = await Promise.all([
           contract.enableCooldown(), contract.buyCooldown(), contract.sellCooldown(), contract.globalCooldown()
@@ -1168,7 +1081,7 @@
         };
       }
 
-      // ========== 归集 ==========
+      // ========== 归集 (原有) ==========
       async function loadSweep() {
         const [ena, to, maxPerTx] = await Promise.all([contract.enableAutoSweep(), contract.sweepTo(), contract.maxSweepPerTx()]);
         let listLen = 0;
@@ -1198,7 +1111,7 @@
         };
       }
 
-      // ========== 开关 ==========
+      // ========== 开关 (原有) ==========
       async function loadSwitches() {
         const sw = {
           '防同步 (antiSYNC)': await contract.antiSYNC(),
@@ -1246,7 +1159,7 @@
         document.getElementById('disableWalletLimitBtn').onclick = ()=> sendTx(contract.disableWalletLimit(), '持仓限制已永久禁用');
       }
 
-      // ========== 预售 ==========
+      // ========== 预售 (原有) ==========
       async function loadPresale() {
         const [ena,price,ap,lim,mt,cur] = await Promise.all([
           contract.presaleEnabled(),contract.price(),contract.amountPerUnits(),contract.mintLimit(),contract.minted(),contract.currency()
@@ -1271,7 +1184,7 @@
         };
       }
 
-      // ========== 名单管理 ==========
+      // ========== 名单管理 (原有) ==========
       document.getElementById('addFeeWhiteBtn').onclick = ()=>{
         const addr = document.getElementById('whitelistAddressInput').value.trim();
         if(ethers.utils.isAddress(addr)) sendTx(contract.setFeeWhiteList([addr],true), '已加入白名单');
@@ -1296,7 +1209,7 @@
         if(ethers.utils.isAddress(addr)) sendTx(contract.setSwapPairList(addr,false), '交易对已禁用');
       };
 
-      // ========== 综合查询 ==========
+      // ========== 综合查询 (原有) ==========
       document.getElementById('queryAllBtn').onclick = async ()=>{
         const addr = document.getElementById('queryAddressInput').value.trim();
         if(!ethers.utils.isAddress(addr)) return log('无效地址', 'error');
@@ -1315,7 +1228,7 @@
 
       document.getElementById('launchBtn').onclick = ()=> sendTx(contract.launch(), '交易已启动');
 
-      // ========== 工具箱 ==========
+      // ========== 工具箱 (原有) ==========
       async function loadTools() {
         document.getElementById('toolsContainer').innerHTML = `
           <div class="param-unit"><div class="param-title">设置基金地址</div>
